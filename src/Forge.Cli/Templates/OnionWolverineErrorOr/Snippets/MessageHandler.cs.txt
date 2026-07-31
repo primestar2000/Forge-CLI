@@ -1,0 +1,32 @@
+// Tokens: Usings, Namespace, AuthNamespace, PersistenceNamespace, ErrorsNamespace,
+//         ReturnsUsing, Message, Returns, HandlerBody
+{{Usings}}using ErrorOr;
+using {{AuthNamespace}};
+using {{ErrorsNamespace}};
+using {{PersistenceNamespace}};
+{{ReturnsUsing}}
+
+namespace {{Namespace}};
+
+public class {{Message}}Handler
+{
+    private readonly IUnitOfWork _unitOfWork;
+
+    public {{Message}}Handler(IUnitOfWork unitOfWork)
+    {
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<ErrorOr<{{Returns}}>> Handle(
+        {{Message}} message,
+        ICurrentUser currentUser,
+        CancellationToken cancellationToken)
+    {
+        if (!currentUser.IsAuthenticated)
+        {
+            return Errors.Authentication.UserNotFound;
+        }
+
+{{HandlerBody}}
+    }
+}

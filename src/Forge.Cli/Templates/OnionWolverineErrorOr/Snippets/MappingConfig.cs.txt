@@ -1,0 +1,17 @@
+// Tokens: Usings, Namespace, DomainEntitiesNamespace, Entity, Registration
+{{Usings}}using {{DomainEntitiesNamespace}};
+using Mapster;
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Mapster registrations for every {{Entity}} response shape.
+/// 'forge make:resource -n {{Entity}}' appends a new registration here rather than adding a file.
+/// </summary>
+public class {{Entity}}MappingConfig : IRegister
+{
+    public void Register(TypeAdapterConfig config)
+    {
+{{Registration}}
+    }
+}

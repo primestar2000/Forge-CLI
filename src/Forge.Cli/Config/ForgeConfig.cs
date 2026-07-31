@@ -29,6 +29,7 @@ public sealed class ForgeConfig
     public string ApplicationRepoPath { get; set; } = "Common/Interfaces/Persistence";
     public string ApplicationUnitOfWorkInterfacePath { get; set; } = "Common/Interfaces/Persistence/Common/IUnitOfWork.cs";
     public string ApplicationErrorsPath { get; set; } = "Common/Errors";
+    public string ApplicationResourcesPath { get; set; } = "Common/Resources";
     public string ApplicationNamespace { get; set; } = "";
 
     public string InfrastructureProject { get; set; } = "";
@@ -57,4 +58,34 @@ public sealed class ForgeConfig
     public string Scheduler { get; set; } = "wolverine";
 
     public string StubOverridesPath { get; set; } = ".forge/stubs";
+
+    public ResourceNaming ResourceNaming { get; set; } = new();
+}
+
+/// <summary>
+/// How response types are named. Config-driven for the same reason roleGuardStyle is: the
+/// convention varies per team, and forcing one would mean forking the tool to change it.
+///
+/// Deliberately responses only. In this template the command/query record IS the inbound
+/// contract, so a parallel Request type is ceremony unless the HTTP shape must diverge.
+/// </summary>
+public sealed class ResourceNaming
+{
+    public string Suffix { get; set; } = "Response";
+
+    /// <summary>Audience segment, e.g. Public/Customer/Admin/Partner. Empty = no audience.</summary>
+    public string[] Audiences { get; set; } = ["Public", "Customer", "Admin", "Partner"];
+
+    /// <summary>View segment, e.g. Summary (list) / Detail (single). Empty = the default view.</summary>
+    public string[] Views { get; set; } = ["Summary", "Detail"];
+
+    /// <summary>Segments are dropped when empty, so Order + "" + "" -> OrderResponse.</summary>
+    public string Pattern { get; set; } = "{Entity}{Audience}{View}{Suffix}";
+
+    public string Compose(string entity, string? audience, string? view) =>
+        Pattern
+            .Replace("{Entity}", entity, StringComparison.Ordinal)
+            .Replace("{Audience}", audience ?? string.Empty, StringComparison.Ordinal)
+            .Replace("{View}", view ?? string.Empty, StringComparison.Ordinal)
+            .Replace("{Suffix}", Suffix, StringComparison.Ordinal);
 }

@@ -53,6 +53,140 @@ makeEntity.SetAction((parse, ct) =>
 
 root.Subcommands.Add(makeEntity);
 
+// ------------------------------------------------------------------------ make:resource
+var resourceEntityOption = new Option<string>("--name", "-n")
+{
+    Description = "Entity the response projects (e.g. Order).",
+    Required = true
+};
+
+var audienceOption = new Option<string>("--audience", "-a")
+{
+    Description = "Audience segment, e.g. public, customer, admin, partner."
+};
+
+var viewOption = new Option<string>("--view")
+{
+    Description = "View segment, e.g. summary (list) or detail (single record)."
+};
+
+var onlyOption = new Option<string[]>("--only")
+{
+    Description = "Include only these entity properties, in this order.",
+    AllowMultipleArgumentsPerToken = true
+};
+
+var excludeOption = new Option<string[]>("--exclude")
+{
+    Description = "Include every entity property except these.",
+    AllowMultipleArgumentsPerToken = true
+};
+
+var makeResource = new Command("make:resource",
+    "Scaffold an audience-shaped response record plus its Mapster registration.");
+
+foreach (var option in new Option[] { resourceEntityOption, audienceOption, viewOption, onlyOption, excludeOption })
+    makeResource.Options.Add(option);
+
+makeResource.WithGlobals();
+makeResource.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "make:resource", (template, context, token) =>
+        template.PlanResource(context, new Forge.Cli.Templates.OnionWolverineErrorOr.ResourceSpec(
+            Entity: parse.GetValue(resourceEntityOption)!,
+            Audience: parse.GetValue(audienceOption),
+            View: parse.GetValue(viewOption),
+            Only: parse.GetValue(onlyOption) ?? [],
+            Exclude: parse.GetValue(excludeOption) ?? []), token), ct));
+
+root.Subcommands.Add(makeResource);
+
+// ------------------------------------------------------------------------- make:feature
+var featureNameOption = new Option<string>("--name", "-n")
+{
+    Description = "Feature name (e.g. CreateGig).",
+    Required = true
+};
+
+var typeOption = new Option<string>("--type")
+{
+    Description = "command or query.",
+    Required = true
+};
+
+var rolesOption = new Option<string[]>("--roles")
+{
+    Description = "Roles allowed to execute this message, e.g. --roles User Admin.",
+    AllowMultipleArgumentsPerToken = true
+};
+
+var anonymousOption = new Option<bool>("--anonymous")
+{
+    Description = "Message is genuinely public; emits the role-check bypass marker instead."
+};
+
+var groupOption = new Option<string>("--group", "-g")
+{
+    Description = "Feature group folder, e.g. -g Gigs -> Features/Gigs/Commands/<Name>/."
+};
+
+var returnsOption = new Option<string>("--returns")
+{
+    Description = "Handler result type inside ErrorOr<>. Defaults to Success."
+};
+
+var featurePropsOption = new Option<string>("--properties", "-p")
+{
+    Description = "Message record parameters, e.g. \"Name:string,BudgetMin:int\"."
+};
+
+var withRepoOption = new Option<bool>("--with-repo")
+{
+    Description = "Also scaffold the repository pair for --entity (defaults to the feature name)."
+};
+
+var featureEntityOption = new Option<string>("--entity")
+{
+    Description = "Entity for --with-repo, when it differs from the feature name."
+};
+
+var makeFeature = new Command("make:feature", "Scaffold a command/query record, its Wolverine handler and a validator.");
+foreach (var option in new Option[]
+{
+    featureNameOption, typeOption, rolesOption, anonymousOption, groupOption,
+    returnsOption, featurePropsOption, withRepoOption, featureEntityOption
+})
+{
+    makeFeature.Options.Add(option);
+}
+makeFeature.WithGlobals();
+makeFeature.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "make:feature", (template, context, token) =>
+    {
+        var typeText = parse.GetValue(typeOption)!;
+        MessageKind kind;
+        if (typeText.Equals("command", StringComparison.OrdinalIgnoreCase)) kind = MessageKind.Command;
+        else if (typeText.Equals("query", StringComparison.OrdinalIgnoreCase)) kind = MessageKind.Query;
+        else return Task.FromResult(PlanResult.UsageError($"--type must be 'command' or 'query', not '{typeText}'."));
+
+        var parsed = PropertyParser.Parse(parse.GetValue(featurePropsOption));
+        if (!parsed.Ok) return Task.FromResult(PlanResult.UsageError(parsed.Error!));
+
+        var spec = new FeatureSpec(
+            Name: parse.GetValue(featureNameOption)!,
+            Kind: kind,
+            Properties: parsed.Properties,
+            Roles: (parse.GetValue(rolesOption) ?? []).Select(NameHelper.Pascal).ToList(),
+            Anonymous: parse.GetValue(anonymousOption),
+            Group: parse.GetValue(groupOption),
+            Returns: parse.GetValue(returnsOption),
+            WithRepo: parse.GetValue(withRepoOption),
+            Entity: parse.GetValue(featureEntityOption));
+
+        return template.PlanFeature(context, spec, token);
+    }, ct));
+
+root.Subcommands.Add(makeFeature);
+
 // ---------------------------------------------------------------------------- make:repo
 var entityOption = new Option<string>("--entity", "-i")
 {

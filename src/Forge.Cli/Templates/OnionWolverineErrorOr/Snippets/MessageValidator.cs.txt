@@ -1,0 +1,12 @@
+// Tokens: Usings, Namespace, Message, Rules
+{{Usings}}using FluentValidation;
+
+namespace {{Namespace}};
+
+public class {{Message}}Validator : AbstractValidator<{{Message}}>
+{
+    public {{Message}}Validator()
+    {
+{{Rules}}
+    }
+}

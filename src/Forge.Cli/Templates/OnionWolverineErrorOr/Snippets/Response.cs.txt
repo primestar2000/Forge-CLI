@@ -1,0 +1,5 @@
+// Tokens: Usings, Namespace, Response, Parameters, Audience
+{{Usings}}namespace {{Namespace}};
+
+/// <summary>{{Audience}}</summary>
+public record {{Response}}({{Parameters}});

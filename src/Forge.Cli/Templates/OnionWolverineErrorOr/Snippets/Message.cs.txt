@@ -1,0 +1,5 @@
+// Tokens: Usings, Namespace, GuardUsings, Message, Parameters, GuardDeclaration, GuardBody
+{{Usings}}{{GuardUsings}}namespace {{Namespace}};
+
+public record {{Message}}({{Parameters}}){{GuardDeclaration}}
+{{GuardBody}}

@@ -161,6 +161,79 @@ public static class SyntaxPatcher
     }
 
     // ---------------------------------------------------------------------------------
+    // Mapster IRegister — append "config.NewConfig<Order, OrderAdminResponse>();"
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Appends one registration to an existing mapping config's Register method. One file per
+    /// entity that grows, rather than one file per response — otherwise the audience taxonomy
+    /// doubles the file count it was meant to organise.
+    /// </summary>
+    public static PatchOutcome AddMapsterRegistration(
+        string source,
+        string configClassName,
+        string sourceType,
+        string destinationType,
+        string newLine,
+        string indentUnit)
+    {
+        var root = Parse(source);
+
+        var cls = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == configClassName);
+
+        if (cls is null)
+            return new PatchOutcome.Failed($"Could not find class '{configClassName}'.");
+
+        var register = cls.Members
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == "Register");
+
+        if (register?.Body is null)
+            return new PatchOutcome.Failed(
+                $"'{configClassName}.Register' has no block body to append a registration to." +
+                $"{Environment.NewLine}  -> Add 'config.NewConfig<{sourceType}, {destinationType}>();' manually.");
+
+        // Idempotency, checked against the syntax tree: look for an existing NewConfig<A, B>
+        // invocation rather than matching text, which would also hit comments and strings.
+        if (HasRegistration(register.Body, sourceType, destinationType))
+        {
+            return new PatchOutcome.AlreadyPresent(
+                $"{sourceType} -> {destinationType} is already registered in {configClassName}");
+        }
+
+        var statement = SyntaxFactory.ParseStatement(
+            $"config.NewConfig<{sourceType}, {destinationType}>();");
+
+        var anchor = register.Body.Statements.LastOrDefault();
+
+        BlockSyntax newBody;
+        if (anchor is null)
+        {
+            var indent = TriviaPreserver.IndentOf(register) + indentUnit;
+            newBody = register.Body.WithStatements(
+                SyntaxFactory.SingletonList(statement.AtIndent(indent, newLine)));
+        }
+        else
+        {
+            newBody = register.Body.WithStatements(
+                register.Body.Statements.Add(statement.AsSiblingOf(anchor, newLine)));
+        }
+
+        var updated = root.ReplaceNode(register.Body, newBody);
+        return new PatchOutcome.Patched(updated.ToFullString());
+    }
+
+    private static bool HasRegistration(BlockSyntax body, string sourceType, string destinationType) =>
+        body.DescendantNodes()
+            .OfType<GenericNameSyntax>()
+            .Any(g => g.Identifier.Text == "NewConfig"
+                   && g.TypeArgumentList.Arguments.Count == 2
+                   && g.TypeArgumentList.Arguments[0].ToString() == sourceType
+                   && g.TypeArgumentList.Arguments[1].ToString() == destinationType);
+
+    // ---------------------------------------------------------------------------------
     // DbContext — add "public DbSet<Product> Products => Set<Product>();"
     // ---------------------------------------------------------------------------------
 

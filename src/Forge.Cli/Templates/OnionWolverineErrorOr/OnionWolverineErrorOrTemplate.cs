@@ -20,6 +20,24 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
     public Task<PlanResult> PlanEntity(TemplateContext ctx, EntitySpec spec, CancellationToken ct) =>
         Task.FromResult(EntityScaffold.Plan(ctx, spec));
 
+    public Task<PlanResult> PlanResource(TemplateContext ctx, ResourceSpec spec, CancellationToken ct) =>
+        Task.FromResult(ResourceScaffold.Plan(ctx, spec));
+
+    public async Task<PlanResult> PlanFeature(TemplateContext ctx, FeatureSpec spec, CancellationToken ct)
+    {
+        var feature = FeatureScaffold.Plan(ctx, spec);
+        if (!feature.Ok || !spec.WithRepo) return feature;
+
+        // Composition, not duplication: --with-repo reuses PlanRepository wholesale.
+        // PlanExecutor detects two actions targeting one path before anything is written.
+        var entity = string.IsNullOrWhiteSpace(spec.Entity) ? spec.Name : spec.Entity!;
+        var repo = await PlanRepository(ctx, entity, ct);
+
+        return repo.Ok
+            ? PlanResult.Success(feature.Plan.Concat(repo.Plan))
+            : repo;
+    }
+
     public Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct)
     {
         // Validate input BEFORE building any part of the plan, so bad input is a clean usage

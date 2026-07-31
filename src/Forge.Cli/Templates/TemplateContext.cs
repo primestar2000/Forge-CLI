@@ -16,6 +16,7 @@ public sealed class TemplateContext(
 {
     private SourceIndex? _domainIndex;
     private SourceIndex? _infrastructureIndex;
+    private SourceIndex? _applicationIndex;
 
     public ForgeConfig Config { get; } = config;
     public string SolutionRoot { get; } = solutionRoot;
@@ -36,6 +37,10 @@ public sealed class TemplateContext(
     /// <summary>Types in the infrastructure project — used to locate the DbContext by name.</summary>
     public SourceIndex InfrastructureIndex =>
         _infrastructureIndex ??= SourceIndex.Build(PathIn(Config.InfrastructureProject));
+
+    /// <summary>Types in the application project — used to resolve --returns to a real namespace.</summary>
+    public SourceIndex ApplicationIndex =>
+        _applicationIndex ??= SourceIndex.Build(PathIn(Config.ApplicationProject));
 
     /// <summary>Absolute path from a solution-root-relative path.</summary>
     public string PathIn(params string[] segments) =>

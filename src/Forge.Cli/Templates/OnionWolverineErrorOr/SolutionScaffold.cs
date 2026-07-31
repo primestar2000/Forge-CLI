@@ -160,8 +160,15 @@ internal static class SolutionScaffold
             }));
 
         // ---- API ------------------------------------------------------------------------
+        // The middleware CONSUMES the marker interfaces, so it must vary with roleGuardStyle too.
+        // Emitting the single-array middleware alongside role-and-subrole markers produces a
+        // solution that does not compile.
+        var middlewareStub = spec.RoleGuardStyle == "single-array"
+            ? "Solution/RoleCheckMiddleware.cs.txt"
+            : "Solution/RoleCheckMiddlewareSubRole.cs.txt";
+
         plan = Add(plan, Path.Combine(apiDir, "Middleware", "RoleCheckMiddleware.cs"),
-            ctx.Render("Solution/RoleCheckMiddleware.cs.txt", new Dictionary<string, string>
+            ctx.Render(middlewareStub, new Dictionary<string, string>
             {
                 ["Namespace"] = apiMiddlewareNs,
                 ["ApplicationAuthNamespace"] = appAuthNs,

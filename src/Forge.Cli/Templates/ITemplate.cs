@@ -27,6 +27,10 @@ public interface ITemplate
 
     Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct);
 
+    Task<PlanResult> PlanFeature(TemplateContext ctx, FeatureSpec spec, CancellationToken ct);
+
+    Task<PlanResult> PlanResource(TemplateContext ctx, OnionWolverineErrorOr.ResourceSpec spec, CancellationToken ct);
+
     /// <summary>
     /// One-time solution scaffold. Takes a SolutionSpec rather than TemplateContext because
     /// there is no forge.config.json yet — this command creates it.

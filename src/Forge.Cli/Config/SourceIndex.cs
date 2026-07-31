@@ -4,12 +4,17 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Forge.Cli.Config;
 
+/// <summary>A declared property, or a positional record parameter.</summary>
+public sealed record PropertyInfo(string Name, string Type);
+
 public sealed record TypeEntry(
     string Name,
     SyntaxKind Kind,
     string FilePath,
     string? Namespace,
-    IReadOnlyList<string> BaseTypes);
+    IReadOnlyList<string> BaseTypes,
+    IReadOnlyList<string> Members,
+    IReadOnlyList<PropertyInfo> Properties);
 
 /// <summary>
 /// One syntactic pass over every .cs file under the solution root, indexed by type name.
@@ -49,7 +54,13 @@ public sealed class SourceIndex
                     type.Kind(),
                     file,
                     NamespaceOf(type),
-                    type.BaseList?.Types.Select(t => t.Type.ToString()).ToList() ?? []));
+                    type.BaseList?.Types.Select(t => t.Type.ToString()).ToList() ?? [],
+                    // Enum members let make:feature validate --roles against the real enum
+                    // instead of generating code that references a role that does not exist.
+                    type is EnumDeclarationSyntax e
+                        ? e.Members.Select(m => m.Identifier.Text).ToList()
+                        : [],
+                    PropertiesOf(type)));
             }
         }
 
@@ -63,6 +74,37 @@ public sealed class SourceIndex
             || path.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Public instance properties, plus positional record parameters — so a response can be
+    /// derived from an entity whether it is a class or a positional record.
+    /// </summary>
+    private static IReadOnlyList<PropertyInfo> PropertiesOf(BaseTypeDeclarationSyntax type)
+    {
+        var result = new List<PropertyInfo>();
+
+        if (type is TypeDeclarationSyntax declaration)
+        {
+            if (declaration.ParameterList is not null)
+            {
+                foreach (var parameter in declaration.ParameterList.Parameters)
+                {
+                    if (parameter.Type is not null)
+                        result.Add(new PropertyInfo(parameter.Identifier.Text, parameter.Type.ToString()));
+                }
+            }
+
+            foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>())
+            {
+                var isPublic = property.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword));
+                var isStatic = property.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+                if (isPublic && !isStatic)
+                    result.Add(new PropertyInfo(property.Identifier.Text, property.Type.ToString()));
+            }
+        }
+
+        return result;
     }
 
     private static string? NamespaceOf(SyntaxNode node)
