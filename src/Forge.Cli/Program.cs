@@ -2,6 +2,8 @@ using System.CommandLine;
 using System.Text.Json;
 using Forge.Cli.Cli;
 using Forge.Cli.Config;
+using Forge.Cli.Planning;
+using Forge.Cli.Templates;
 
 // System.CommandLine 2.0 GA API: SetAction / Options.Add / Subcommands.Add / Parse().Invoke().
 // Beta spellings (SetHandler, AddOption, AddCommand) do not compile against 2.0.10.
@@ -10,6 +12,46 @@ var root = new RootCommand("forge — architectural code generator for ASP.NET C
 
 // ------------------------------------------------------------------------- make:solution
 root.Subcommands.Add(MakeSolutionCommand.Build());
+
+// -------------------------------------------------------------------------- make:entity
+var entityNameOption = new Option<string>("--name", "-n")
+{
+    Description = "Entity name (e.g. Product).",
+    Required = true
+};
+
+var propertiesOption = new Option<string>("--properties", "-p")
+{
+    Description = "Comma-separated Name:type list, e.g. \"Name:string,Price:decimal,Notes:string?\"."
+};
+
+var skipDbSetOption = new Option<bool>("--skip-dbset")
+{
+    Description = "Do not add a DbSet property to the DbContext."
+};
+
+var makeEntity = new Command("make:entity", "Scaffold a Domain entity plus its EF Core IEntityTypeConfiguration.");
+makeEntity.Options.Add(entityNameOption);
+makeEntity.Options.Add(propertiesOption);
+makeEntity.Options.Add(skipDbSetOption);
+makeEntity.WithGlobals();
+makeEntity.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "make:entity", (template, context, token) =>
+    {
+        // Parse before planning so a malformed --properties is a clean usage error rather than
+        // a failure halfway through building the plan.
+        var parsed = PropertyParser.Parse(parse.GetValue(propertiesOption));
+        if (!parsed.Ok) return Task.FromResult(PlanResult.UsageError(parsed.Error!));
+
+        var spec = new EntitySpec(
+            parse.GetValue(entityNameOption)!,
+            parsed.Properties,
+            parse.GetValue(skipDbSetOption));
+
+        return template.PlanEntity(context, spec, token);
+    }, ct));
+
+root.Subcommands.Add(makeEntity);
 
 // ---------------------------------------------------------------------------- make:repo
 var entityOption = new Option<string>("--entity", "-i")

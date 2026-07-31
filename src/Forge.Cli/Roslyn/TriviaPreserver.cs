@@ -30,6 +30,25 @@ public static class TriviaPreserver
         node.WithLeadingTrivia(SyntaxFactory.Whitespace(IndentOf(anchor)))
             .WithTrailingTrivia(SyntaxFactory.EndOfLine(newLine));
 
+    /// <summary>
+    /// Positions a node immediately AFTER <paramref name="anchor"/>, adding a blank line first
+    /// when the anchor is a multi-line block (constructor, method). Adjacent one-line members
+    /// like properties stay adjacent; a new member after a method body gets breathing room —
+    /// which is what a human would have written.
+    /// </summary>
+    public static T AsSiblingAfter<T>(this T node, SyntaxNode anchor, string newLine) where T : SyntaxNode
+    {
+        var indent = SyntaxFactory.Whitespace(IndentOf(anchor));
+        var anchorIsBlock = anchor.ToString().Contains('\n');
+
+        var leading = anchorIsBlock
+            ? SyntaxFactory.TriviaList(SyntaxFactory.EndOfLine(newLine), indent)
+            : SyntaxFactory.TriviaList(indent);
+
+        return node.WithLeadingTrivia(leading)
+                   .WithTrailingTrivia(SyntaxFactory.EndOfLine(newLine));
+    }
+
     /// <summary>For the first member of an otherwise empty type, where there is no sibling to match.</summary>
     public static T AtIndent<T>(this T node, string indent, string newLine) where T : SyntaxNode =>
         node.WithLeadingTrivia(SyntaxFactory.Whitespace(indent))

@@ -1,0 +1,17 @@
+// Tokens: Usings, Namespace, DomainEntitiesNamespace, Entity, EntityPlural, PropertyConfig
+{{Usings}}using {{DomainEntitiesNamespace}};
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace {{Namespace}};
+
+public class {{Entity}}Configuration : IEntityTypeConfiguration<{{Entity}}>
+{
+    public void Configure(EntityTypeBuilder<{{Entity}}> builder)
+    {
+        builder.ToTable("{{EntityPlural}}");
+
+        builder.HasKey(x => x.Id);
+{{PropertyConfig}}
+    }
+}

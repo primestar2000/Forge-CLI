@@ -17,6 +17,9 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
     public Task<PlanResult> PlanSolution(SolutionScaffoldContext ctx, SolutionSpec spec, CancellationToken ct) =>
         Task.FromResult(SolutionScaffold.Plan(ctx, spec));
 
+    public Task<PlanResult> PlanEntity(TemplateContext ctx, EntitySpec spec, CancellationToken ct) =>
+        Task.FromResult(EntityScaffold.Plan(ctx, spec));
+
     public Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct)
     {
         // Validate input BEFORE building any part of the plan, so bad input is a clean usage

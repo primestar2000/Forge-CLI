@@ -161,6 +161,64 @@ public static class SyntaxPatcher
     }
 
     // ---------------------------------------------------------------------------------
+    // DbContext — add "public DbSet<Product> Products => Set<Product>();"
+    // ---------------------------------------------------------------------------------
+
+    public static PatchOutcome AddDbSetToContext(
+        string source,
+        string contextName,
+        string entity,
+        string propertyName,
+        string entityNamespace,
+        string newLine,
+        string indentUnit)
+    {
+        var root = Parse(source);
+
+        var cls = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == contextName);
+
+        if (cls is null)
+            return new PatchOutcome.Failed(
+                $"Could not find class '{contextName}'. " +
+                $"Check 'dbContextName' in forge.config.json.");
+
+        if (cls.Members.Any(m => NameOf(m) == propertyName))
+            return new PatchOutcome.AlreadyPresent($"'{propertyName}' is already a member of {contextName}");
+
+        // Expression-bodied so no constructor changes are needed and it works whether or not the
+        // context declares other DbSets.
+        var text = $"public DbSet<{entity}> {propertyName} => Set<{entity}>();";
+        var member = SyntaxFactory.ParseMemberDeclaration(text);
+        if (member is null)
+            return new PatchOutcome.Failed($"Internal error: '{text}' did not parse.");
+
+        // Anchor: after the last existing DbSet, else after the constructor, else last member.
+        var anchor = cls.Members
+                .OfType<PropertyDeclarationSyntax>()
+                .LastOrDefault(p => p.Type.ToString().StartsWith("DbSet<", StringComparison.Ordinal))
+            ?? (MemberDeclarationSyntax?)cls.Members.OfType<ConstructorDeclarationSyntax>().LastOrDefault()
+            ?? cls.Members.LastOrDefault();
+
+        ClassDeclarationSyntax updated;
+        if (anchor is null)
+        {
+            var indent = TriviaPreserver.IndentOf(cls) + indentUnit;
+            updated = cls.WithMembers(SyntaxFactory.SingletonList(member.AtIndent(indent, newLine)));
+        }
+        else
+        {
+            updated = cls.InsertNodesAfter(anchor, [member.AsSiblingAfter(anchor, newLine)]);
+        }
+
+        var result = root.ReplaceNode(cls, updated);
+        result = EnsureUsing(result, entityNamespace, newLine);
+        result = EnsureUsing(result, "Microsoft.EntityFrameworkCore", newLine);
+        return new PatchOutcome.Patched(result.ToFullString());
+    }
+
+    // ---------------------------------------------------------------------------------
     // UnitOfWork.cs — three coordinated edits: property, ctor parameter, ctor assignment
     // ---------------------------------------------------------------------------------
 

@@ -1,0 +1,17 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace MyShop.Infrastructure.Persistence;
+
+public class MyShopDbContext : DbContext
+{
+    public MyShopDbContext(DbContextOptions<MyShopDbContext> options)
+        : base(options)
+    {
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyShopDbContext).Assembly);
+        base.OnModelCreating(modelBuilder);
+    }
+}

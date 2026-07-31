@@ -23,6 +23,8 @@ public interface ITemplate
     /// </summary>
     string SnippetFolder { get; }
 
+    Task<PlanResult> PlanEntity(TemplateContext ctx, EntitySpec spec, CancellationToken ct);
+
     Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct);
 
     /// <summary>

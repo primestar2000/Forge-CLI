@@ -1,0 +1,28 @@
+using System;
+using Microsoft.EntityFrameworkCore;
+using MyShop.Domain.Entities;
+
+namespace MyShop.Infrastructure.Persistence
+{
+    /// <summary>Application database context.</summary>
+    public class MyShopDbContext : DbContext
+    {
+        #region Sets
+
+        /// <summary>All customers.</summary>
+        public DbSet<Customer> Customers => Set<Customer>();
+        public DbSet<Order> Orders => Set<Order>();
+
+        #endregion
+
+        public MyShopDbContext(DbContextOptions<MyShopDbContext> options)
+            : base(options)
+        {
+        }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+        }
+    }
+}

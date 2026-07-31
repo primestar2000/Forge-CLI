@@ -1,0 +1,8 @@
+// Tokens: Usings, Namespace, Entity, Properties
+{{Usings}}namespace {{Namespace}};
+
+public class {{Entity}}
+{
+    public Guid Id { get; set; }
+{{Properties}}
+}

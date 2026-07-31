@@ -20,6 +20,35 @@ public class AdversarialPatchTests
 
     public static TheoryData<string> InterfaceFixtures() => Fixtures("IUnitOfWork");
     public static TheoryData<string> ClassFixtures() => Fixtures("UnitOfWork");
+    public static TheoryData<string> DbContextFixtures() => Fixtures("DbContext");
+
+    [Theory]
+    [MemberData(nameof(DbContextFixtures))]
+    public void DbSet_patch_never_corrupts(string name)
+    {
+        var before = ReadFixture("DbContext", name);
+        var outcome = SyntaxPatcher.AddDbSetToContext(
+            before, "MyShopDbContext", "Product", "Products",
+            "MyShop.Domain.Entities", NewLine, Indent);
+
+        if (outcome is PatchOutcome.Failed failed)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(failed.Error), "A refusal must explain itself.");
+            return;
+        }
+
+        var patched = Assert.IsType<PatchOutcome.Patched>(outcome);
+        AssertPatchIsSound(before, patched.After, "Products");
+
+        Assert.Contains("DbSet<Product> Products => Set<Product>();", patched.After);
+        // The entity namespace must come along, or the patched file will not compile.
+        Assert.Contains("using MyShop.Domain.Entities;", patched.After);
+
+        var second = SyntaxPatcher.AddDbSetToContext(
+            patched.After, "MyShopDbContext", "Product", "Products",
+            "MyShop.Domain.Entities", NewLine, Indent);
+        Assert.IsType<PatchOutcome.AlreadyPresent>(second);
+    }
 
     [Theory]
     [MemberData(nameof(InterfaceFixtures))]
