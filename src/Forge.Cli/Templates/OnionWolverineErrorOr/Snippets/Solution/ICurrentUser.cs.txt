@@ -1,0 +1,29 @@
+// Tokens: Namespace, RoleEnum, RoleEnumNamespace
+using {{RoleEnumNamespace}};
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Read-only view of the authenticated user. Application code depends on THIS interface only.
+/// </summary>
+public interface ICurrentUser
+{
+    Guid Id { get; }
+
+    string Email { get; }
+
+    {{RoleEnum}} Role { get; }
+
+    bool IsAuthenticated { get; }
+
+    bool IsAdmin();
+}
+
+/// <summary>
+/// Write access, deliberately split out: only the authentication middleware is trusted with
+/// SetUser. Handlers receive ICurrentUser and therefore cannot impersonate.
+/// </summary>
+public interface ICurrentUserSetter : ICurrentUser
+{
+    void SetUser(Guid id, string email, {{RoleEnum}} role);
+}

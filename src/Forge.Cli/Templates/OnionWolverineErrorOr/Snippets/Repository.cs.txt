@@ -17,32 +17,32 @@ public class {{Entity}}Repository : I{{Entity}}Repository
 
     public async Task<{{Entity}}> CreateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default)
     {
-        await _context.{{EntityPlural}}.AddAsync({{EntityCamel}}, cancellationToken);
+        await _context.Set<{{Entity}}>().AddAsync({{EntityCamel}}, cancellationToken);
         return {{EntityCamel}};
     }
 
     public async Task<{{Entity}}{{Nullable}}> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return await _context.{{EntityPlural}}
+        return await _context.Set<{{Entity}}>()
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
     }
 
     public async Task<IEnumerable<{{Entity}}>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        return await _context.{{EntityPlural}}
+        return await _context.Set<{{Entity}}>()
             .AsNoTracking()
             .ToListAsync(cancellationToken);
     }
 
     public Task<{{Entity}}> UpdateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default)
     {
-        _context.{{EntityPlural}}.Update({{EntityCamel}});
+        _context.Set<{{Entity}}>().Update({{EntityCamel}});
         return Task.FromResult({{EntityCamel}});
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var {{EntityCamel}} = await _context.{{EntityPlural}}
+        var {{EntityCamel}} = await _context.Set<{{Entity}}>()
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if ({{EntityCamel}} is null)
@@ -50,7 +50,7 @@ public class {{Entity}}Repository : I{{Entity}}Repository
             return false;
         }
 
-        _context.{{EntityPlural}}.Remove({{EntityCamel}});
+        _context.Set<{{Entity}}>().Remove({{EntityCamel}});
         return true;
     }
 }

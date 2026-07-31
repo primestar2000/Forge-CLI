@@ -1,0 +1,53 @@
+// Tokens: Namespace
+namespace {{Namespace}};
+
+/// <summary>Written once as generic ideology; every list query reuses it.</summary>
+public sealed record PagedResult<T>(
+    IReadOnlyList<T> Items,
+    int Page,
+    int PageSize,
+    int TotalCount)
+{
+    public int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+
+    public bool HasPrevious => Page > 1;
+
+    public bool HasNext => Page < TotalPages;
+}
+
+public sealed record PaginationParams
+{
+    private const int MaxPageSize = 100;
+
+    public int Page { get; init; } = 1;
+
+    private readonly int _pageSize = 20;
+
+    public int PageSize
+    {
+        get => _pageSize;
+        init => _pageSize = value switch
+        {
+            < 1 => 1,
+            > MaxPageSize => MaxPageSize,
+            _ => value
+        };
+    }
+
+    public int Skip => (Page < 1 ? 0 : Page - 1) * PageSize;
+}
+
+public static class PaginationExtensions
+{
+    public static PagedResult<T> ToPagedResult<T>(
+        this IEnumerable<T> source,
+        PaginationParams pagination,
+        int totalCount)
+    {
+        return new PagedResult<T>(
+            source.ToList(),
+            pagination.Page,
+            pagination.PageSize,
+            totalCount);
+    }
+}

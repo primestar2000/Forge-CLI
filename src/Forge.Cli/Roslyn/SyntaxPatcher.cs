@@ -25,6 +25,66 @@ public static class SyntaxPatcher
         (CompilationUnitSyntax)CSharpSyntaxTree.ParseText(source, ParseOptions).GetRoot();
 
     // ---------------------------------------------------------------------------------
+    // using directives
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Adds "using {namespaceName};" if the file does not already have access to that namespace.
+    ///
+    /// Inserting a type reference without its using is the difference between a patch that
+    /// compiles and one that does not — and the failure only shows up at build time, in a file
+    /// the user did not write.
+    /// </summary>
+    public static CompilationUnitSyntax EnsureUsing(
+        CompilationUnitSyntax root,
+        string namespaceName,
+        string newLine)
+    {
+        if (string.IsNullOrWhiteSpace(namespaceName)) return root;
+
+        if (root.Usings.Any(u => u.Name?.ToString() == namespaceName)) return root;
+
+        // A file declaring namespace A.B.C can already see types in A.B and A — no using needed.
+        var declared = DeclaredNamespace(root);
+        if (declared is not null &&
+            (declared == namespaceName || declared.StartsWith(namespaceName + ".", StringComparison.Ordinal)))
+        {
+            return root;
+        }
+
+        var directive = SyntaxFactory
+            .UsingDirective(SyntaxFactory.ParseName(namespaceName))
+            // Without explicit trailing space on the keyword this emits "usingSystem.Foo;".
+            .WithUsingKeyword(SyntaxFactory.Token(SyntaxKind.UsingKeyword).WithTrailingTrivia(SyntaxFactory.Space))
+            .WithTrailingTrivia(SyntaxFactory.EndOfLine(newLine));
+
+        if (root.Usings.Count > 0)
+        {
+            // Append after the last using rather than trying to slot it in alphabetically: the
+            // existing block may not be sorted, and appending is the smallest predictable diff.
+            return root.InsertNodesAfter(root.Usings[^1], [directive]);
+        }
+
+        // No usings yet: place the directive above the namespace declaration, carrying over the
+        // declaration's leading trivia so any file header comment stays on top.
+        var member = root.Members.FirstOrDefault();
+        if (member is null) return root.WithUsings(SyntaxFactory.SingletonList(directive));
+
+        var leading = member.GetLeadingTrivia();
+        return root
+            .WithMembers(root.Members.Replace(member, member.WithLeadingTrivia(SyntaxFactory.EndOfLine(newLine))))
+            .WithUsings(SyntaxFactory.SingletonList(directive.WithLeadingTrivia(leading)));
+    }
+
+    private static string? DeclaredNamespace(CompilationUnitSyntax root)
+    {
+        var fileScoped = root.Members.OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
+        if (fileScoped is not null) return fileScoped.Name.ToString();
+
+        return root.Members.OfType<NamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
+    }
+
+    // ---------------------------------------------------------------------------------
     // IUnitOfWork.cs — add "IGigRepository Gig { get; }" to the interface
     // ---------------------------------------------------------------------------------
 
@@ -34,7 +94,8 @@ public static class SyntaxPatcher
         string propertyName,
         string repositoryType,
         string newLine,
-        string indentUnit)
+        string indentUnit,
+        string? repositoryNamespace = null)
     {
         var root = Parse(source);
 
@@ -75,7 +136,9 @@ public static class SyntaxPatcher
 
         // ToFullString, never NormalizeWhitespace — the diff must be the new member only,
         // not a reflow of the entire file.
-        return new PatchOutcome.Patched(root.ReplaceNode(iface, newIface).ToFullString());
+        var updated = root.ReplaceNode(iface, newIface);
+        updated = EnsureUsing(updated, repositoryNamespace ?? string.Empty, newLine);
+        return new PatchOutcome.Patched(updated.ToFullString());
     }
 
     /// <summary>
@@ -108,7 +171,8 @@ public static class SyntaxPatcher
         string repositoryType,
         string parameterName,
         string newLine,
-        string indentUnit)
+        string indentUnit,
+        string? repositoryNamespace = null)
     {
         var root = Parse(source);
 
@@ -182,7 +246,9 @@ public static class SyntaxPatcher
         var newCtor = AddDependency(liveCtor, repositoryType, parameterName, propertyName, newLine, indentUnit);
         updated = updated.ReplaceNode(liveCtor, newCtor);
 
-        return new PatchOutcome.Patched(root.ReplaceNode(cls, updated).ToFullString());
+        var result = root.ReplaceNode(cls, updated);
+        result = EnsureUsing(result, repositoryNamespace ?? string.Empty, newLine);
+        return new PatchOutcome.Patched(result.ToFullString());
     }
 
     private static PropertyDeclarationSyntax? FindPropertyAnchor(ClassDeclarationSyntax cls)

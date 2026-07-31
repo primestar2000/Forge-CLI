@@ -1,0 +1,21 @@
+// Tokens: Namespace
+using ErrorOr;
+
+namespace {{Namespace}};
+
+/// <summary>
+/// One partial class per aggregate. 'forge make:repo' adds Errors.{Entity}.cs alongside this.
+/// </summary>
+public static partial class Errors
+{
+    public static class Authentication
+    {
+        public static Error UserNotFound => Error.Unauthorized(
+            code: "Authentication.UserNotFound",
+            description: "The current user could not be resolved.");
+
+        public static Error Forbidden => Error.Forbidden(
+            code: "Authentication.Forbidden",
+            description: "You do not have permission to perform this action.");
+    }
+}

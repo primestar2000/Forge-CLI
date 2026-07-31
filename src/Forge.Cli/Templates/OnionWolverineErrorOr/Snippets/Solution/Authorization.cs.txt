@@ -1,0 +1,18 @@
+// Tokens: Namespace, RoleEnum, RoleEnumNamespace
+using {{RoleEnumNamespace}};
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Opt-in marker: a message implementing this declares exactly which roles may execute it.
+/// Messages implementing NEITHER this nor IAllowRoleCheckBypass are denied by default.
+/// </summary>
+public interface IRequireExplicitRoles
+{
+    {{RoleEnum}}[] Roles { get; }
+}
+
+/// <summary>Opt-out marker for messages that are genuinely public (domain events, health checks).</summary>
+public interface IAllowRoleCheckBypass
+{
+}

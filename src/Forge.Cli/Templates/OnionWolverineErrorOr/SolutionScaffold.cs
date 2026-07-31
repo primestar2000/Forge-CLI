@@ -1,0 +1,231 @@
+using System.Text.Json;
+using Forge.Cli.Cli;
+using Forge.Cli.Config;
+using Forge.Cli.Planning;
+
+namespace Forge.Cli.Templates.OnionWolverineErrorOr;
+
+/// <summary>
+/// make:solution for the onion / Wolverine / ErrorOr template.
+///
+/// Generates every file itself rather than shelling out to `dotnet new` + `dotnet sln add`.
+/// Shelling out would write files outside the GenerationPlan, which would break --dry-run
+/// (it could no longer preview anything), break command-level atomicity, and make the command
+/// non-deterministic. Project GUIDs are derived from project names for the same reason.
+/// </summary>
+internal static class SolutionScaffold
+{
+    public static PlanResult Plan(SolutionScaffoldContext ctx, SolutionSpec spec)
+    {
+        if (!NameHelper.IsValidIdentifier(spec.Name))
+            return PlanResult.UsageError($"'{spec.Name}' is not a valid C# identifier, so it cannot name a solution.");
+
+        if (spec.RoleGuardStyle is not ("single-array" or "role-and-subrole"))
+            return PlanResult.UsageError($"--role-guard must be 'single-array' or 'role-and-subrole', not '{spec.RoleGuardStyle}'.");
+
+        var s = spec.Name;
+        var plan = GenerationPlan.Empty;
+
+        // ---- namespaces -----------------------------------------------------------------
+        var domainNs = $"{s}.Domain";
+        var appNs = $"{s}.ApplicationService";
+        var infraNs = $"{s}.Infrastructure";
+        var apiNs = $"{s}.API";
+
+        var enumsNs = $"{domainNs}.Enums";
+        var domainAuthNs = $"{domainNs}.Common.Authorization";
+        var appAuthNs = $"{appNs}.Common.Interfaces.Authentication";
+        var appPersistenceNs = $"{appNs}.Common.Interfaces.Persistence.Common";
+        var appErrorsNs = $"{appNs}.Common.Errors";
+        var appResponseNs = $"{appNs}.Common.Response";
+        var infraPersistenceNs = $"{infraNs}.Persistence.Repository.Common";
+        var dbContextNs = $"{infraNs}.Persistence";
+        var apiMiddlewareNs = $"{apiNs}.Middleware";
+
+        var domainDir = Path.Combine("src", $"{s}.Domain");
+        var appDir = Path.Combine("src", $"{s}.ApplicationService");
+        var infraDir = Path.Combine("src", $"{s}.Infrastructure");
+        var apiDir = Path.Combine("src", $"{s}.API");
+
+        GenerationPlan Add(GenerationPlan p, string relativePath, string content)
+        {
+            var full = ctx.PathIn(relativePath);
+            if (File.Exists(full) && !ctx.Force)
+                return p.With(new FileAction.Skip(full, "already exists (use --force to overwrite)"));
+            return p.With(new FileAction.Create(full, content));
+        }
+
+        // ---- solution + projects --------------------------------------------------------
+        plan = Add(plan, $"{s}.sln", ctx.RenderRaw("Solution/Solution.sln.txt", new Dictionary<string, string>
+        {
+            ["Solution"] = s,
+            ["DomainGuid"] = SolutionSpec.ProjectGuid($"{s}.Domain"),
+            ["ApplicationGuid"] = SolutionSpec.ProjectGuid($"{s}.ApplicationService"),
+            ["InfrastructureGuid"] = SolutionSpec.ProjectGuid($"{s}.Infrastructure"),
+            ["ApiGuid"] = SolutionSpec.ProjectGuid($"{s}.API")
+        }));
+
+        var projectModel = new Dictionary<string, string>
+        {
+            ["Solution"] = s,
+            ["TargetFramework"] = spec.TargetFramework
+        };
+
+        plan = Add(plan, Path.Combine(domainDir, $"{s}.Domain.csproj"), ctx.RenderRaw("Solution/Domain.csproj.txt", projectModel));
+        plan = Add(plan, Path.Combine(appDir, $"{s}.ApplicationService.csproj"), ctx.RenderRaw("Solution/Application.csproj.txt", projectModel));
+        plan = Add(plan, Path.Combine(infraDir, $"{s}.Infrastructure.csproj"), ctx.RenderRaw("Solution/Infrastructure.csproj.txt", projectModel));
+        plan = Add(plan, Path.Combine(apiDir, $"{s}.API.csproj"), ctx.RenderRaw("Solution/Api.csproj.txt", projectModel));
+
+        // Pinning forge into a tool manifest is good practice — every teammate then gets the
+        // version that generated the code — but it is OPT-IN, because a manifest takes
+        // precedence over a global install: from the moment it exists, `dotnet forge` resolves
+        // the LOCAL tool. If that exact version is not restorable from a configured feed, the
+        // very next forge command fails with "Run dotnet tool restore". Writing it by default
+        // therefore bricks forge in the solution it just created.
+        if (spec.PinForge)
+        {
+            plan = Add(plan, Path.Combine(".config", "dotnet-tools.json"),
+                ctx.RenderRaw("Solution/ToolManifest.json.txt", new Dictionary<string, string>
+                {
+                    ["ForgeVersion"] = ForgeVersion.Current
+                }));
+        }
+
+        // ---- Domain ---------------------------------------------------------------------
+        plan = Add(plan, Path.Combine(domainDir, "Enums", $"{spec.RoleEnum}.cs"),
+            ctx.Render("Solution/UserRole.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = enumsNs,
+                ["RoleEnum"] = spec.RoleEnum
+            }));
+
+        var authStub = spec.RoleGuardStyle == "single-array"
+            ? "Solution/Authorization.cs.txt"
+            : "Solution/AuthorizationSubRole.cs.txt";
+
+        var authFile = spec.RoleGuardStyle == "single-array"
+            ? "IRequireExplicitRoles.cs"
+            : "IRequiresExplicitRoles.cs";
+
+        plan = Add(plan, Path.Combine(domainDir, "Common", "Authorization", authFile),
+            ctx.Render(authStub, new Dictionary<string, string>
+            {
+                ["Namespace"] = domainAuthNs,
+                ["RoleEnum"] = spec.RoleEnum,
+                ["RoleEnumNamespace"] = enumsNs
+            }));
+
+        // ---- ApplicationService ---------------------------------------------------------
+        plan = Add(plan, Path.Combine(appDir, "Common", "Interfaces", "Authentication", "ICurrentUser.cs"),
+            ctx.Render("Solution/ICurrentUser.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = appAuthNs,
+                ["RoleEnum"] = spec.RoleEnum,
+                ["RoleEnumNamespace"] = enumsNs
+            }));
+
+        plan = Add(plan, Path.Combine(appDir, "Common", "Interfaces", "Persistence", "Common", "IUnitOfWork.cs"),
+            ctx.Render("Solution/IUnitOfWork.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = appPersistenceNs
+            }));
+
+        plan = Add(plan, Path.Combine(appDir, "Common", "Errors", "Errors.Authentication.cs"),
+            ctx.Render("Solution/ErrorsAuthentication.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = appErrorsNs
+            }));
+
+        plan = Add(plan, Path.Combine(appDir, "Common", "Response", "PagedResult.cs"),
+            ctx.Render("Solution/PagedResult.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = appResponseNs
+            }));
+
+        // ---- Infrastructure -------------------------------------------------------------
+        plan = Add(plan, Path.Combine(infraDir, "Persistence", $"{spec.ResolvedDbContextName}.cs"),
+            ctx.Render("Solution/DbContext.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = dbContextNs,
+                ["DbContextName"] = spec.ResolvedDbContextName
+            }));
+
+        plan = Add(plan, Path.Combine(infraDir, "Persistence", "Repository", "Common", "UnitOfWork.cs"),
+            ctx.Render("Solution/UnitOfWork.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = infraPersistenceNs,
+                ["UnitOfWorkInterfaceNamespace"] = appPersistenceNs,
+                ["DbContextName"] = spec.ResolvedDbContextName,
+                ["DbContextNamespace"] = dbContextNs
+            }));
+
+        // ---- API ------------------------------------------------------------------------
+        plan = Add(plan, Path.Combine(apiDir, "Middleware", "RoleCheckMiddleware.cs"),
+            ctx.Render("Solution/RoleCheckMiddleware.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = apiMiddlewareNs,
+                ["ApplicationAuthNamespace"] = appAuthNs,
+                ["DomainAuthNamespace"] = domainAuthNs
+            }));
+
+        plan = Add(plan, Path.Combine(apiDir, "Common", "CurrentUser.cs"),
+            ctx.Render("Solution/CurrentUser.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = appAuthNs,
+                ["ApplicationAuthNamespace"] = appAuthNs,
+                ["RoleEnum"] = spec.RoleEnum,
+                ["RoleEnumNamespace"] = enumsNs
+            }));
+
+        plan = Add(plan, Path.Combine(apiDir, "Controllers", "ApiController.cs"),
+            ctx.Render("Solution/ApiController.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = $"{apiNs}.Controllers"
+            }));
+
+        plan = Add(plan, Path.Combine(apiDir, "Program.cs"),
+            ctx.Render("Solution/Program.cs.txt", new Dictionary<string, string>
+            {
+                ["Solution"] = s,
+                ["ApiMiddlewareNamespace"] = apiMiddlewareNs,
+                ["ApplicationAuthNamespace"] = appAuthNs,
+                ["ApplicationPersistenceNamespace"] = appPersistenceNs,
+                ["InfraPersistenceNamespace"] = infraPersistenceNs,
+                ["DbContextNamespace"] = dbContextNs,
+                ["DbContextName"] = spec.ResolvedDbContextName
+            }));
+
+        // ---- forge.config.json ----------------------------------------------------------
+        var config = new ForgeConfig
+        {
+            Schema = "https://raw.githubusercontent.com/Pitechy/forge/main/schema/forge.config.v1.json",
+            Version = ForgeConfig.CurrentVersion,
+            Template = "onion-wolverine-erroror",
+            SolutionName = s,
+            DomainProject = ToConfigPath(domainDir),
+            DomainNamespace = domainNs,
+            ApplicationProject = ToConfigPath(appDir),
+            ApplicationNamespace = appNs,
+            ApplicationRepoPath = "Common/Interfaces/Persistence",
+            ApplicationUnitOfWorkInterfacePath = "Common/Interfaces/Persistence/Common/IUnitOfWork.cs",
+            ApplicationErrorsPath = "Common/Errors",
+            InfrastructureProject = ToConfigPath(infraDir),
+            InfrastructureNamespace = infraNs,
+            InfrastructureRepoPath = "Persistence/Repository",
+            InfrastructureUnitOfWorkImplPath = "Persistence/Repository/Common/UnitOfWork.cs",
+            ApiProject = ToConfigPath(apiDir),
+            ApiNamespace = apiNs,
+            DbContextName = spec.ResolvedDbContextName,
+            RoleEnum = spec.RoleEnum,
+            RoleGuardStyle = spec.RoleGuardStyle,
+            Scheduler = spec.Scheduler
+        };
+
+        plan = Add(plan, ConfigLoader.FileName,
+            JsonSerializer.Serialize(config, ConfigLoader.JsonOptions) + Environment.NewLine);
+
+        return PlanResult.Success(plan);
+    }
+
+    private static string ToConfigPath(string path) => path.Replace('\\', '/');
+}

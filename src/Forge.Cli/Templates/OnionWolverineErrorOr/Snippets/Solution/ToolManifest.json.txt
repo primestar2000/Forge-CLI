@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "pitechy.forge.cli": {
+      "version": "{{ForgeVersion}}",
+      "commands": [
+        "dotnet-forge"
+      ],
+      "rollForward": false
+    }
+  }
+}

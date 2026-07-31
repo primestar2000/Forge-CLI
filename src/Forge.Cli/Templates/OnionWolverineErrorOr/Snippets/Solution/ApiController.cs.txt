@@ -1,0 +1,54 @@
+// Tokens: Namespace
+using ErrorOr;
+using Microsoft.AspNetCore.Mvc;
+using Wolverine;
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Maps ErrorOr&lt;T&gt; onto the correct HTTP response so feature controllers stay one-liners.
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+public abstract class ApiController : ControllerBase
+{
+    protected readonly IMessageBus Bus;
+
+    protected ApiController(IMessageBus bus) => Bus = bus;
+
+    // Lambda, not the Ok method group: ControllerBase.Ok has several overloads, so a method-group
+    // conversion to Func<T, IActionResult> is ambiguous (CS0123).
+    protected IActionResult HandleResult<T>(ErrorOr<T> result) =>
+        result.Match<IActionResult>(value => Ok(value), HandleErrors);
+
+    private IActionResult HandleErrors(List<Error> errors)
+    {
+        if (errors.Count == 0)
+        {
+            return Problem();
+        }
+
+        if (errors.All(e => e.Type == ErrorType.Validation))
+        {
+            var modelState = new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary();
+            foreach (var error in errors)
+            {
+                modelState.AddModelError(error.Code, error.Description);
+            }
+
+            return ValidationProblem(modelState);
+        }
+
+        var first = errors[0];
+        var status = first.Type switch
+        {
+            ErrorType.NotFound => StatusCodes.Status404NotFound,
+            ErrorType.Conflict => StatusCodes.Status409Conflict,
+            ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
+            ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+            _ => StatusCodes.Status500InternalServerError
+        };
+
+        return Problem(statusCode: status, title: first.Description, type: first.Code);
+    }
+}

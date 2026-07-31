@@ -14,6 +14,9 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
     public string SnippetFolder => "OnionWolverineErrorOr";
 
+    public Task<PlanResult> PlanSolution(SolutionScaffoldContext ctx, SolutionSpec spec, CancellationToken ct) =>
+        Task.FromResult(SolutionScaffold.Plan(ctx, spec));
+
     public Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct)
     {
         // Validate input BEFORE building any part of the plan, so bad input is a clean usage
@@ -24,6 +27,18 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
         var config = ctx.Config;
         var name = NameHelper.Pascal(entity);
+
+        // Generating a repository for an entity that does not exist produces a solution that
+        // cannot compile. Fail fast with a pointer, rather than leaving the user to decode a
+        // wall of CS0246s.
+        if (!ctx.AllowMissingEntity && !EntityExists(ctx, name))
+        {
+            return Task.FromResult(PlanResult.UsageError(
+                $"No entity type '{name}' found in {config.DomainProject}." + Environment.NewLine +
+                $"  -> Create it first:  forge make:entity -n {name}" + Environment.NewLine +
+                $"  -> Or, if it lives elsewhere, re-run with --allow-missing-entity."));
+        }
+
         var plan = GenerationPlan.Empty;
 
         var repoInterface = NameHelper.RepositoryInterface(name);
@@ -77,7 +92,7 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
         var uowInterface = PatchFile(ctx, interfaceFile, "applicationUnitOfWorkInterfacePath", source =>
             SyntaxPatcher.AddRepositoryToInterface(
                 source, "IUnitOfWork", name, repoInterface,
-                ctx.CodeStyle.NewLine, ctx.CodeStyle.IndentUnit));
+                ctx.CodeStyle.NewLine, ctx.CodeStyle.IndentUnit, appRepoNamespace));
 
         if (!uowInterface.Ok) return Task.FromResult(uowInterface);
         plan = plan.Concat(uowInterface.Plan);
@@ -88,7 +103,7 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
             SyntaxPatcher.AddRepositoryToUnitOfWork(
                 source, "UnitOfWork", name, repoInterface,
                 NameHelper.RepositoryParameter(name),
-                ctx.CodeStyle.NewLine, ctx.CodeStyle.IndentUnit));
+                ctx.CodeStyle.NewLine, ctx.CodeStyle.IndentUnit, appRepoNamespace));
 
         if (!uowImpl.Ok) return Task.FromResult(uowImpl);
         plan = plan.Concat(uowImpl.Plan);
@@ -164,6 +179,12 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
                 $"config says '{config.Scheduler}' but no {label} package reference was found",
                 $"make:job output will not compile until {package} is referenced.");
     }
+
+    private static bool EntityExists(TemplateContext ctx, string name) =>
+        ctx.DomainIndex.Types.Any(t =>
+            t.Name == name &&
+            t.Kind is SyntaxKind.ClassDeclaration or SyntaxKind.RecordDeclaration
+                   or SyntaxKind.StructDeclaration or SyntaxKind.RecordStructDeclaration);
 
     private static GenerationPlan CreateOrSkip(TemplateContext ctx, string path, Func<string> content)
     {

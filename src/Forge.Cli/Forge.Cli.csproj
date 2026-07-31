@@ -43,7 +43,7 @@
       silently dropping the ".cs" and making every lookup fail at runtime. Computing the name here
       keeps it deterministic; StubRepositoryTests guards it.
     -->
-    <EmbeddedResource Include="Templates\**\Snippets\*.cs.txt">
+    <EmbeddedResource Include="Templates\**\Snippets\**\*.txt">
       <!--
         WithCulture=false is LOAD-BEARING. MSBuild parses "Foo.cs.txt" as name + culture +
         extension, and "cs" is a valid culture code (Czech) — so without this, every stub is

@@ -26,6 +26,12 @@ public interface ITemplate
     Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct);
 
     /// <summary>
+    /// One-time solution scaffold. Takes a SolutionSpec rather than TemplateContext because
+    /// there is no forge.config.json yet — this command creates it.
+    /// </summary>
+    Task<PlanResult> PlanSolution(SolutionScaffoldContext ctx, SolutionSpec spec, CancellationToken ct);
+
+    /// <summary>
     /// Architecture-specific health checks (role-guard shape, scheduler package, DbContext).
     /// These live here rather than in Diagnostics/Checks so the core diagnostics stay free of
     /// onion/Wolverine/ErrorOr knowledge — invariant 8.

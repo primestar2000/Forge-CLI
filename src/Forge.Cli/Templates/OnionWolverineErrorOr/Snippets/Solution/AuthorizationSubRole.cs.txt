@@ -1,0 +1,20 @@
+// Tokens: Namespace, RoleEnum, RoleEnumNamespace
+using {{RoleEnumNamespace}};
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Opt-in marker with sub-role granularity. Messages implementing NEITHER this nor
+/// IAllowAnonymousRoles are denied by default.
+/// </summary>
+public interface IRequiresExplicitRoles
+{
+    {{RoleEnum}}[] AllowedRoles { get; }
+
+    string[] AllowedSubRoles { get; }
+}
+
+/// <summary>Opt-out marker for messages that are genuinely public.</summary>
+public interface IAllowAnonymousRoles
+{
+}

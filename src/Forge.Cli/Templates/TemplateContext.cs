@@ -14,11 +14,23 @@ public sealed class TemplateContext(
     StubRepository stubs,
     bool force)
 {
+    private SourceIndex? _domainIndex;
+
     public ForgeConfig Config { get; } = config;
     public string SolutionRoot { get; } = solutionRoot;
     public CodeStyle CodeStyle { get; } = codeStyle;
     public StubRepository Stubs { get; } = stubs;
     public bool Force { get; } = force;
+
+    /// <summary>Set by commands that can legitimately run before the entity type exists.</summary>
+    public bool AllowMissingEntity { get; set; }
+
+    /// <summary>
+    /// Types declared in the domain project, built lazily. Used to verify an entity actually
+    /// exists before generating code that references it.
+    /// </summary>
+    public SourceIndex DomainIndex =>
+        _domainIndex ??= SourceIndex.Build(PathIn(Config.DomainProject));
 
     /// <summary>Absolute path from a solution-root-relative path.</summary>
     public string PathIn(params string[] segments) =>

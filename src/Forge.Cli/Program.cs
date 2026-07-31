@@ -8,6 +8,9 @@ using Forge.Cli.Config;
 
 var root = new RootCommand("forge — architectural code generator for ASP.NET Core");
 
+// ------------------------------------------------------------------------- make:solution
+root.Subcommands.Add(MakeSolutionCommand.Build());
+
 // ---------------------------------------------------------------------------- make:repo
 var entityOption = new Option<string>("--entity", "-i")
 {
@@ -15,12 +18,22 @@ var entityOption = new Option<string>("--entity", "-i")
     Required = true
 };
 
+var allowMissingEntity = new Option<bool>("--allow-missing-entity")
+{
+    Description = "Generate even if the entity type is not found in the domain project."
+};
+
 var makeRepo = new Command("make:repo", "Scaffold I{Entity}Repository + {Entity}Repository and wire them into IUnitOfWork.");
 makeRepo.Options.Add(entityOption);
+makeRepo.Options.Add(allowMissingEntity);
 makeRepo.WithGlobals();
 makeRepo.SetAction((parse, ct) =>
     CommandRunner.RunGenerator(parse, "make:repo",
-        (template, context, token) => template.PlanRepository(context, parse.GetValue(entityOption)!, token), ct));
+        (template, context, token) =>
+        {
+            context.AllowMissingEntity = parse.GetValue(allowMissingEntity);
+            return template.PlanRepository(context, parse.GetValue(entityOption)!, token);
+        }, ct));
 
 root.Subcommands.Add(makeRepo);
 

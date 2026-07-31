@@ -1,0 +1,37 @@
+// Tokens: ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfraPersistenceNamespace,
+//         DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
+using Microsoft.EntityFrameworkCore;
+using Wolverine;
+using {{ApiMiddlewareNamespace}};
+using {{ApplicationAuthNamespace}};
+using {{ApplicationPersistenceNamespace}};
+using {{DbContextNamespace}};
+using {{InfraPersistenceNamespace}};
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+// Swap for UseSqlServer/UseNpgsql once a real connection string exists.
+builder.Services.AddDbContext<{{DbContextName}}>(options =>
+    options.UseInMemoryDatabase("{{Solution}}"));
+
+builder.Services.AddScoped<CurrentUser>();
+builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
+builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
+
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+builder.Host.UseWolverine(options =>
+{
+    // Secure by default: every message is denied unless it opts in. See RoleCheckMiddleware.
+    options.Policies.AddMiddleware(typeof(RoleCheckMiddleware));
+});
+
+var app = builder.Build();
+
+app.UseHttpsRedirection();
+app.MapControllers();
+
+app.Run();

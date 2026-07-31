@@ -1,0 +1,20 @@
+// Tokens: Namespace, DbContextName
+using Microsoft.EntityFrameworkCore;
+
+namespace {{Namespace}};
+
+public class {{DbContextName}} : DbContext
+{
+    public {{DbContextName}}(DbContextOptions<{{DbContextName}}> options)
+        : base(options)
+    {
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Picks up every IEntityTypeConfiguration<T> in this assembly, including the ones
+        // 'forge make:entity' generates.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof({{DbContextName}}).Assembly);
+        base.OnModelCreating(modelBuilder);
+    }
+}

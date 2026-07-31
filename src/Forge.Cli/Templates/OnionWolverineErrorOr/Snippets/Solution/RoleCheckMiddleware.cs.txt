@@ -1,0 +1,41 @@
+// Tokens: Namespace, ApplicationAuthNamespace, DomainAuthNamespace
+using {{ApplicationAuthNamespace}};
+using {{DomainAuthNamespace}};
+using Wolverine;
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Secure by default: every message is DENIED unless it explicitly opts in by implementing
+/// IRequireExplicitRoles, or opts out via IAllowRoleCheckBypass.
+///
+/// The failure mode of forgetting to annotate a new command is "access denied", not "wide open".
+/// </summary>
+public static class RoleCheckMiddleware
+{
+    public static void Before(Envelope envelope, ICurrentUser currentUser)
+    {
+        var message = envelope.Message;
+
+        if (message is IAllowRoleCheckBypass)
+        {
+            return;
+        }
+
+        if (message is IRequireExplicitRoles guarded)
+        {
+            if (!guarded.Roles.Contains(currentUser.Role))
+            {
+                throw new UnauthorizedAccessException(
+                    $"Access denied: role '{currentUser.Role}' cannot execute " +
+                    $"'{message.GetType().Name}'.");
+            }
+
+            return;
+        }
+
+        throw new UnauthorizedAccessException(
+            $"Security lockdown: '{message?.GetType().Name}' is restricted by default. " +
+            $"Implement {nameof(IRequireExplicitRoles)} or {nameof(IAllowRoleCheckBypass)}.");
+    }
+}

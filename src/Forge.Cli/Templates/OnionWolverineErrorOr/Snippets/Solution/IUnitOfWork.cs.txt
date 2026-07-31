@@ -1,0 +1,11 @@
+// Tokens: Namespace
+namespace {{Namespace}};
+
+/// <summary>
+/// Named-property facade over the per-aggregate repositories.
+/// 'forge make:repo -i &lt;Entity&gt;' inserts a new property here automatically.
+/// </summary>
+public interface IUnitOfWork
+{
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}

@@ -34,7 +34,10 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
     /// </summary>
     public string LoadBuiltIn(string stubName)
     {
-        var resource = $"Forge.Cli.Templates.{templateName}.Snippets.{stubName}";
+        // Stub names may be nested ("Solution/Program.cs.txt"). Embedded-resource names are
+        // dot-separated, so the directory separator has to be translated for the lookup.
+        // The published-override path keeps the slashes, so .forge/stubs mirrors the layout.
+        var resource = $"Forge.Cli.Templates.{templateName}.Snippets.{stubName.Replace('/', '.').Replace('\\', '.')}";
         using var stream = Assembly.GetManifestResourceStream(resource)
             ?? throw new StubException(
                 $"Built-in stub '{stubName}' not found (looked for embedded resource '{resource}'). " +
@@ -77,10 +80,19 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
         return string.Join("\n", lines.Skip(skip));
     }
 
-    public string Render(string stubName, IReadOnlyDictionary<string, string> model)
+    /// <summary>
+    /// Substitutes tokens without parsing the result as C#. For .sln, .csproj and JSON stubs,
+    /// where a C# parse would obviously fail.
+    /// </summary>
+    public string RenderRaw(string stubName, IReadOnlyDictionary<string, string> model) =>
+        Substitute(stubName, StripTokenHeader(Load(stubName)), model, IsPublished(stubName));
+
+    private string Substitute(
+        string stubName,
+        string template,
+        IReadOnlyDictionary<string, string> model,
+        bool published)
     {
-        var template = StripTokenHeader(Load(stubName));
-        var published = IsPublished(stubName);
         var output = new StringBuilder();
 
         var index = 0;
@@ -109,7 +121,13 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
             index = close + 2;
         }
 
-        var rendered = output.ToString();
+        return output.ToString();
+    }
+
+    public string Render(string stubName, IReadOnlyDictionary<string, string> model)
+    {
+        var published = IsPublished(stubName);
+        var rendered = Substitute(stubName, StripTokenHeader(Load(stubName)), model, published);
 
         var diagnostics = CSharpSyntaxTree.ParseText(rendered)
             .GetDiagnostics()
