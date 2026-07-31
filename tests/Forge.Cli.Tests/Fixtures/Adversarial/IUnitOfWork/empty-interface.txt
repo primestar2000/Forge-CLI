@@ -1,0 +1,5 @@
+namespace OfficeCommute.ApplicationService.Common.Interfaces.Persistence.Common;
+
+public interface IUnitOfWork
+{
+}

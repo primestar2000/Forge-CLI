@@ -1,0 +1,18 @@
+// Tokens: Usings, Namespace, Entity, EntityCamelSpaced
+{{Usings}}using ErrorOr;
+
+namespace {{Namespace}};
+
+public static partial class Errors
+{
+    public static class {{Entity}}
+    {
+        public static Error NotFound => Error.NotFound(
+            code: "{{Entity}}.NotFound",
+            description: "{{Entity}} not found.");
+
+        public static Error AlreadyExists => Error.Conflict(
+            code: "{{Entity}}.AlreadyExists",
+            description: "{{Entity}} already exists.");
+    }
+}

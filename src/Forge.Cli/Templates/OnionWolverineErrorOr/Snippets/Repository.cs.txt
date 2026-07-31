@@ -1,0 +1,56 @@
+// Tokens: Usings, Namespace, DomainNamespace, ApplicationNamespace, ApplicationRepoNamespace,
+//         Entity, EntityCamel, EntityPlural, Nullable, DbContextName
+{{Usings}}using {{ApplicationRepoNamespace}};
+using {{DomainNamespace}}.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace {{Namespace}};
+
+public class {{Entity}}Repository : I{{Entity}}Repository
+{
+    private readonly {{DbContextName}} _context;
+
+    public {{Entity}}Repository({{DbContextName}} context)
+    {
+        _context = context;
+    }
+
+    public async Task<{{Entity}}> CreateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default)
+    {
+        await _context.{{EntityPlural}}.AddAsync({{EntityCamel}}, cancellationToken);
+        return {{EntityCamel}};
+    }
+
+    public async Task<{{Entity}}{{Nullable}}> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.{{EntityPlural}}
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+    }
+
+    public async Task<IEnumerable<{{Entity}}>> GetAllAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.{{EntityPlural}}
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<{{Entity}}> UpdateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default)
+    {
+        _context.{{EntityPlural}}.Update({{EntityCamel}});
+        return Task.FromResult({{EntityCamel}});
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var {{EntityCamel}} = await _context.{{EntityPlural}}
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
+        if ({{EntityCamel}} is null)
+        {
+            return false;
+        }
+
+        _context.{{EntityPlural}}.Remove({{EntityCamel}});
+        return true;
+    }
+}

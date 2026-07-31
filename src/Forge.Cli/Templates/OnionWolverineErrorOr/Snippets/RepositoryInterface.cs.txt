@@ -1,0 +1,17 @@
+// Tokens: Usings, Namespace, DomainNamespace, Entity, EntityCamel, Nullable
+{{Usings}}using {{DomainNamespace}}.Entities;
+
+namespace {{Namespace}};
+
+public interface I{{Entity}}Repository
+{
+    Task<{{Entity}}> CreateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default);
+
+    Task<{{Entity}}{{Nullable}}> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<{{Entity}}>> GetAllAsync(CancellationToken cancellationToken = default);
+
+    Task<{{Entity}}> UpdateAsync({{Entity}} {{EntityCamel}}, CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+}

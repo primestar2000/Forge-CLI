@@ -1,0 +1,13 @@
+namespace OfficeCommute.ApplicationService.Common.Interfaces.Persistence.Common;
+
+public interface IUnitOfWork
+{
+    IUserRepository Users { get; }
+
+    /// <summary>
+    /// Commits every tracked change in a single transaction.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the commit.</param>
+    /// <returns>The number of affected rows.</returns>
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}

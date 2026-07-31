@@ -1,0 +1,8 @@
+namespace MusixGig.Infrastructure.Data.Repos.Base;
+
+public class UnitOfWork : IUnitOfWork
+{
+    public IArtistRepository Artists { get; }
+    public UnitOfWork(IArtistRepository artists) { Artists = artists; }
+    public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(0);
+}

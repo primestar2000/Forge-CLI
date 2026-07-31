@@ -1,0 +1,11 @@
+namespace OfficeCommute.Infrastructure.Persistence.Repository.Common;
+
+public class UnitOfWork(OfficeCommuteDbContext context, IUserRepository users) : IUnitOfWork
+{
+    public IUserRepository Users { get; } = users;
+
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return context.SaveChangesAsync(cancellationToken);
+    }
+}

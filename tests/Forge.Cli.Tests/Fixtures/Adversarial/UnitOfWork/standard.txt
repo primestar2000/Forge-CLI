@@ -1,0 +1,21 @@
+namespace OfficeCommute.Infrastructure.Persistence.Repository.Common;
+
+public class UnitOfWork : IUnitOfWork
+{
+    private readonly OfficeCommuteDbContext _context;
+
+    public IUserRepository Users { get; }
+    public IRoleRepository Roles { get; }
+
+    public UnitOfWork(OfficeCommuteDbContext context, IUserRepository users, IRoleRepository roles)
+    {
+        _context = context;
+        Users = users;
+        Roles = roles;
+    }
+
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        return _context.SaveChangesAsync(cancellationToken);
+    }
+}

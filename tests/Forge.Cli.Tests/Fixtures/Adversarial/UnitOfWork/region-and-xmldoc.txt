@@ -1,0 +1,29 @@
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OfficeCommute.Infrastructure.Persistence.Repository.Common
+{
+    /// <summary>Facade over the per-aggregate repositories.</summary>
+    public class UnitOfWork : IUnitOfWork
+    {
+        private readonly OfficeCommuteDbContext _context;
+
+        #region Repositories
+
+        /// <summary>Users aggregate.</summary>
+        public IUserRepository Users { get; }
+
+        #endregion
+
+        public UnitOfWork(OfficeCommuteDbContext context, IUserRepository users)
+        {
+            _context = context;
+            Users = users;
+        }
+
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            return _context.SaveChangesAsync(cancellationToken);
+        }
+    }
+}

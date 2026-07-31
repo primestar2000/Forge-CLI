@@ -1,0 +1,35 @@
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+nupkg/
+
+## Tool / IDE
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+## Test + coverage
+TestResults/
+coverage*.json
+coverage*.xml
+*.coverage
+
+## Snapshot testing — *.received.* are failures-in-progress and must never be committed.
+## *.verified.* ARE committed: they are the reviewed contract.
+*.received.*
+
+## forge's own working directory when dogfooding in this repo
+.forge/fixtures/
+
+## Claude Code agent tooling — skills, agents, commands, local settings. Not tracked.
+## Note: CLAUDE.md lives at the repo root and IS tracked.
+.claude/
+
+## OS
+.DS_Store
+Thumbs.db

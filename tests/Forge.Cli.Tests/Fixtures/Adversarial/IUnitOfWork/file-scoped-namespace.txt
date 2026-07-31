@@ -1,0 +1,9 @@
+namespace OfficeCommute.ApplicationService.Common.Interfaces.Persistence.Common;
+
+public interface IUnitOfWork
+{
+    IUserRepository Users { get; }
+    IRoleRepository Roles { get; }
+
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}

@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net8.0 + LatestMajor: one build runs on every runtime >= 8.
+         Verified: without RollForward a tool dies on a machine lacking the exact runtime. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>LatestMajor</RollForward>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Forge.Cli</RootNamespace>
+    <AssemblyName>Forge.Cli</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>dotnet-forge</ToolCommandName>
+    <!-- Before first publish, apply for "Pitechy.*" ID prefix reservation at account@nuget.org.
+         A bare "Forge.*" reservation would be denied: it identifies no owner and is a common word. -->
+    <PackageId>Pitechy.Forge.Cli</PackageId>
+    <Authors>Pitechy</Authors>
+    <Company>Pitechy</Company>
+    <Version>0.1.0</Version>
+    <Description>Laravel-Artisan-style architectural code generator for ASP.NET Core.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Humanizer.Core" Version="3.0.10" />
+    <PackageReference Include="System.CommandLine" Version="2.0.10" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Wildcard so a new stub can never be forgotten. .cs.txt keeps the compiler out of them.
+
+      LogicalName is set explicitly because MSBuild's default manifest-name logic MANGLES double
+      extensions: "RepositoryInterface.cs.txt" would be embedded as "...Snippets.RepositoryInterface.txt",
+      silently dropping the ".cs" and making every lookup fail at runtime. Computing the name here
+      keeps it deterministic; StubRepositoryTests guards it.
+    -->
+    <EmbeddedResource Include="Templates\**\Snippets\*.cs.txt">
+      <!--
+        WithCulture=false is LOAD-BEARING. MSBuild parses "Foo.cs.txt" as name + culture +
+        extension, and "cs" is a valid culture code (Czech) — so without this, every stub is
+        compiled into a satellite assembly at cs/Forge.Cli.resources.dll and is invisible to
+        GetManifestResourceStream at runtime. The build succeeds; every generator then fails.
+      -->
+      <WithCulture>false</WithCulture>
+      <LogicalName>$(RootNamespace).Templates.$([System.String]::new('%(RecursiveDir)').Replace('\','.'))%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Forge.Cli.Tests" />
+  </ItemGroup>
+
+</Project>
