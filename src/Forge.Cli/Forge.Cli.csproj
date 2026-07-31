@@ -51,7 +51,13 @@
         GetManifestResourceStream at runtime. The build succeeds; every generator then fails.
       -->
       <WithCulture>false</WithCulture>
-      <LogicalName>$(RootNamespace).Templates.$([System.String]::new('%(RecursiveDir)').Replace('\','.'))%(Filename)%(Extension)</LogicalName>
+      <!--
+        Directory separators stay as '/' rather than becoming '.', so a nested stub name like
+        "Solution/Program.cs.txt" round-trips exactly. With dots there is no way to tell a folder
+        boundary from a dot in the filename, and stub:publish could not reconstruct the layout.
+        Resource names are opaque strings, so '/' is legal here.
+      -->
+      <LogicalName>$(RootNamespace).Stubs/$([System.String]::new('%(RecursiveDir)').Replace('\','/'))%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

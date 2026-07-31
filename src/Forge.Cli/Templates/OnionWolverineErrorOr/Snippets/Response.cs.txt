@@ -1,4 +1,4 @@
-// Tokens: Usings, Namespace, Response, Parameters, Audience
+// forge:tokens Usings, Namespace, Response, Parameters, Audience
 {{Usings}}namespace {{Namespace}};
 
 /// <summary>{{Audience}}</summary>

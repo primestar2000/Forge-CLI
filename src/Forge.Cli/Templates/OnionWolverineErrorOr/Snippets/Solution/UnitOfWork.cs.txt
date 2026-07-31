@@ -1,4 +1,4 @@
-// Tokens: Namespace, UnitOfWorkInterfaceNamespace, DbContextName, DbContextNamespace
+// forge:tokens Namespace, UnitOfWorkInterfaceNamespace, DbContextName, DbContextNamespace
 using {{DbContextNamespace}};
 using {{UnitOfWorkInterfaceNamespace}};
 

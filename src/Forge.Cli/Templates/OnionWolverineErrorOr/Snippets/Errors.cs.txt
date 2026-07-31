@@ -1,4 +1,4 @@
-// Tokens: Usings, Namespace, Entity, EntityCamelSpaced
+// forge:tokens Usings, Namespace, Entity, EntityCamelSpaced
 {{Usings}}using ErrorOr;
 
 namespace {{Namespace}};

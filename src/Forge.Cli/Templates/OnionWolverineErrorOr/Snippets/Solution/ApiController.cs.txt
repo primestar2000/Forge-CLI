@@ -1,4 +1,4 @@
-// Tokens: Namespace
+// forge:tokens Namespace
 using ErrorOr;
 using Microsoft.AspNetCore.Mvc;
 using Wolverine;

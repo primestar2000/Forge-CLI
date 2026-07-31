@@ -1,4 +1,4 @@
-// Tokens: Namespace, RoleEnum, RoleEnumNamespace, ApplicationAuthNamespace
+// forge:tokens Namespace, RoleEnum, RoleEnumNamespace, ApplicationAuthNamespace
 using {{ApplicationAuthNamespace}};
 using {{RoleEnumNamespace}};
 

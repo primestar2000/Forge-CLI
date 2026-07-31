@@ -1,4 +1,4 @@
-// Tokens: Usings, Namespace, Message, Rules
+// forge:tokens Usings, Namespace, Message, Rules
 {{Usings}}using FluentValidation;
 
 namespace {{Namespace}};

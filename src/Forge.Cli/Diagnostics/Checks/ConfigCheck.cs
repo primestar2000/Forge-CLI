@@ -1,4 +1,5 @@
 using Forge.Cli.Config;
+using Forge.Cli.Stubs;
 using Forge.Cli.Templates;
 
 namespace Forge.Cli.Diagnostics.Checks;
@@ -90,46 +91,35 @@ public sealed class StubDriftCheck : IDoctorCheck
             yield break;
         }
 
-        var builtIn = context.Stubs.BuiltInStubNames().ToHashSet(StringComparer.Ordinal);
-        var published = Directory.GetFiles(stubDir, "*.cs.txt").Select(Path.GetFileName).OfType<string>().ToList();
-
-        if (published.Count == 0)
+        var drifts = StubDiffer.Compare(context.Stubs, []);
+        if (drifts.Count == 0)
         {
             yield return CheckResult.Pass("stubs", "using built-in defaults (none published)");
             yield break;
         }
 
-        // A published stub whose name no longer matches any built-in is dead weight — it will
-        // never be loaded, and the team will wonder why their customisation stopped applying.
-        var orphaned = published.Where(p => !builtIn.Contains(p)).ToList();
-        foreach (var orphan in orphaned)
+        // A published stub matching no built-in is dead weight: it will never be loaded, and the
+        // team will wonder why their customisation silently stopped applying.
+        foreach (var orphan in drifts.Where(d => d.Kind == DriftKind.Orphaned))
             yield return CheckResult.Warn("stubs",
-                $"'{orphan}' matches no built-in stub - it will never be used",
-                "It may have been renamed upstream. Compare with 'forge stub:diff'.");
+                $"'{orphan.Name}' matches no built-in stub - it will never be used",
+                "Probably renamed upstream. Compare with 'forge stub:diff'.");
 
-        var drifted = published
-            .Where(builtIn.Contains)
-            .Where(name => !SameContent(Path.Combine(stubDir, name), context.Stubs.LoadBuiltIn(name)))
-            .ToList();
+        var noBaseline = drifts.Count(d => d.Kind == DriftKind.NoBaseline);
+        if (noBaseline > 0)
+            yield return CheckResult.Warn("stubs",
+                $"{noBaseline} published stub(s) have no baseline, so drift cannot be attributed",
+                "forge stub:publish --force   # re-publish to record a baseline");
 
-        yield return drifted.Count == 0
-            ? CheckResult.Pass("stubs", $"{published.Count} published, none drifted from built-in defaults")
+        // Only upstream changes matter here. Local customisation is the entire point of
+        // publishing and must never be reported as a problem.
+        var unadopted = drifts.Where(d => d.Kind is DriftKind.UpstreamOnly or DriftKind.Both).ToList();
+
+        yield return unadopted.Count == 0
+            ? CheckResult.Pass("stubs", $"{drifts.Count} published, all current with built-in defaults")
             : CheckResult.Warn("stubs",
-                $"{drifted.Count} of {published.Count} published stub(s) differ from built-in defaults: {string.Join(", ", drifted)}",
-                "Expected if you customised them. Run 'forge stub:diff' after upgrading forge.");
+                $"{unadopted.Count} of {drifts.Count} published stub(s) have unadopted upstream changes: " +
+                string.Join(", ", unadopted.Select(d => d.Name)),
+                "forge stub:diff --verbosity d");
     }
-
-    private static bool SameContent(string path, string builtIn)
-    {
-        try
-        {
-            return Normalize(File.ReadAllText(path)) == Normalize(builtIn);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static string Normalize(string text) => text.Replace("\r\n", "\n").TrimEnd();
 }

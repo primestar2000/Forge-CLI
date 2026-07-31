@@ -1,5 +1,5 @@
-// Tokens: Usings, Namespace, DomainNamespace, ApplicationNamespace, ApplicationRepoNamespace,
-//         Entity, EntityCamel, EntityPlural, Nullable, DbContextName
+// forge:tokens Usings, Namespace, DomainNamespace, ApplicationNamespace, ApplicationRepoNamespace,
+// forge:tokens Entity, EntityCamel, EntityPlural, Nullable, DbContextName
 {{Usings}}using {{ApplicationRepoNamespace}};
 using {{DomainNamespace}}.Entities;
 using Microsoft.EntityFrameworkCore;

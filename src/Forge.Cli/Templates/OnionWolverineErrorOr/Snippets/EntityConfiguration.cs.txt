@@ -1,4 +1,4 @@
-// Tokens: Usings, Namespace, DomainEntitiesNamespace, Entity, EntityPlural, PropertyConfig
+// forge:tokens Usings, Namespace, DomainEntitiesNamespace, Entity, EntityPlural, PropertyConfig
 {{Usings}}using {{DomainEntitiesNamespace}};
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

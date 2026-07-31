@@ -1,4 +1,4 @@
-// Tokens: Namespace, RoleEnum
+// forge:tokens Namespace, RoleEnum
 namespace {{Namespace}};
 
 public enum {{RoleEnum}}

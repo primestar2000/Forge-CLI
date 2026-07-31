@@ -1,4 +1,4 @@
-// Tokens: Namespace
+// forge:tokens Namespace
 namespace {{Namespace}};
 
 /// <summary>

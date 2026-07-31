@@ -1,5 +1,5 @@
-// Tokens: ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfraPersistenceNamespace,
-//         DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
+// forge:tokens ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfraPersistenceNamespace,
+// forge:tokens DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
 using Microsoft.EntityFrameworkCore;
 using Wolverine;
 using {{ApiMiddlewareNamespace}};

@@ -1,4 +1,4 @@
-// Tokens: Namespace, DbContextName
+// forge:tokens Namespace, DbContextName
 using Microsoft.EntityFrameworkCore;
 
 namespace {{Namespace}};

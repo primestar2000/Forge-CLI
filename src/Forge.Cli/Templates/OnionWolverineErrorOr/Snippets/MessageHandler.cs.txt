@@ -1,5 +1,5 @@
-// Tokens: Usings, Namespace, AuthNamespace, PersistenceNamespace, ErrorsNamespace,
-//         ReturnsUsing, Message, Returns, HandlerBody
+// forge:tokens Usings, Namespace, AuthNamespace, PersistenceNamespace, ErrorsNamespace,
+// forge:tokens ReturnsUsing, Message, Returns, HandlerBody
 {{Usings}}using ErrorOr;
 using {{AuthNamespace}};
 using {{ErrorsNamespace}};

@@ -16,10 +16,31 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
 {
     private static readonly Assembly Assembly = typeof(StubRepository).Assembly;
 
+    public string TemplateName => templateName;
+
+    /// <summary>Marker file recording which forge version the published stubs came from.</summary>
+    public const string VersionMarker = ".forge-version";
+
+    /// <summary>Pristine copies of the built-ins as they were at publish time — the diff baseline.</summary>
+    public const string BaselineFolder = ".baseline";
+
     public bool IsPublished(string stubName) => File.Exists(OverridePath(stubName));
 
-    private string OverridePath(string stubName) =>
-        Path.Combine(solutionRoot, stubOverridesPath, stubName);
+    public string OverridePath(string stubName) =>
+        Path.Combine(solutionRoot, stubOverridesPath, ToRelativePath(stubName));
+
+    public string BaselinePath(string stubName) =>
+        Path.Combine(solutionRoot, stubOverridesPath, BaselineFolder, ToRelativePath(stubName));
+
+    public string VersionMarkerPath =>
+        Path.Combine(solutionRoot, stubOverridesPath, VersionMarker);
+
+    public string StubDirectory => Path.Combine(solutionRoot, stubOverridesPath);
+
+    public bool HasBaseline(string stubName) => File.Exists(BaselinePath(stubName));
+
+    private static string ToRelativePath(string stubName) =>
+        stubName.Replace('/', Path.DirectorySeparatorChar);
 
     public string Load(string stubName)
     {
@@ -34,10 +55,7 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
     /// </summary>
     public string LoadBuiltIn(string stubName)
     {
-        // Stub names may be nested ("Solution/Program.cs.txt"). Embedded-resource names are
-        // dot-separated, so the directory separator has to be translated for the lookup.
-        // The published-override path keeps the slashes, so .forge/stubs mirrors the layout.
-        var resource = $"Forge.Cli.Templates.{templateName}.Snippets.{stubName.Replace('/', '.').Replace('\\', '.')}";
+        var resource = ResourcePrefix + stubName.Replace('\\', '/');
         using var stream = Assembly.GetManifestResourceStream(resource)
             ?? throw new StubException(
                 $"Built-in stub '{stubName}' not found (looked for embedded resource '{resource}'). " +
@@ -47,14 +65,31 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
         return reader.ReadToEnd();
     }
 
-    /// <summary>All built-in stub names, used by stub:publish.</summary>
+    private string ResourcePrefix => $"Forge.Cli.Stubs/{templateName}/Snippets/";
+
+    /// <summary>All built-in stub names, with '/' preserved for nested stubs.</summary>
     public IEnumerable<string> BuiltInStubNames()
     {
-        var prefix = $"Forge.Cli.Templates.{templateName}.Snippets.";
+        var prefix = ResourcePrefix;
         return Assembly.GetManifestResourceNames()
             .Where(n => n.StartsWith(prefix, StringComparison.Ordinal))
             .Select(n => n[prefix.Length..])
             .OrderBy(n => n, StringComparer.Ordinal);
+    }
+
+    /// <summary>Published stub names, discovered by walking .forge/stubs (excluding the baseline).</summary>
+    public IEnumerable<string> PublishedStubNames()
+    {
+        if (!Directory.Exists(StubDirectory)) return [];
+
+        var baseline = Path.Combine(StubDirectory, BaselineFolder);
+
+        return Directory
+            .EnumerateFiles(StubDirectory, "*.txt", SearchOption.AllDirectories)
+            .Where(f => !f.StartsWith(baseline, StringComparison.OrdinalIgnoreCase))
+            .Select(f => Path.GetRelativePath(StubDirectory, f).Replace('\\', '/'))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>
@@ -62,22 +97,27 @@ public sealed class StubRepository(string solutionRoot, string stubOverridesPath
     /// Catching a broken stub here rather than in the user's next build is the difference
     /// between a clear message and a confusing compiler error in generated code.
     /// </summary>
+    /// <summary>Prefix marking a line as forge stub documentation rather than generated output.</summary>
+    public const string DirectivePrefix = "// forge:";
+
     /// <summary>
-    /// Strips the leading "// Tokens: ..." header. That block documents the stub for whoever
-    /// edits it and must not reach generated output — but Load() keeps it, so stub:publish
-    /// still hands teams the documentation.
+    /// Strips "// forge:" directive lines. They document the stub for whoever edits it and must
+    /// not reach generated output — but Load() keeps them, so stub:publish still hands teams the
+    /// documentation.
+    ///
+    /// The prefix is deliberately forge-specific rather than "any leading comment": a licence
+    /// header is the most common stub customisation there is, and stripping every leading
+    /// comment silently ate it.
     /// </summary>
     internal static string StripTokenHeader(string template)
     {
         var lines = template.Replace("\r\n", "\n").Split('\n');
-        if (lines.Length == 0 || !lines[0].TrimStart().StartsWith("// Tokens:", StringComparison.Ordinal))
-            return template;
 
-        var skip = 1;
-        while (skip < lines.Length && lines[skip].TrimStart().StartsWith("//", StringComparison.Ordinal))
-            skip++;
+        var kept = lines
+            .Where(l => !l.TrimStart().StartsWith(DirectivePrefix, StringComparison.Ordinal))
+            .ToList();
 
-        return string.Join("\n", lines.Skip(skip));
+        return kept.Count == lines.Length ? template : string.Join("\n", kept);
     }
 
     /// <summary>

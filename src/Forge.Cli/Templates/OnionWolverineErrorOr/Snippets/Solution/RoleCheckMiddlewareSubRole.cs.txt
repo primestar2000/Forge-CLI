@@ -1,4 +1,4 @@
-// Tokens: Namespace, ApplicationAuthNamespace, DomainAuthNamespace
+// forge:tokens Namespace, ApplicationAuthNamespace, DomainAuthNamespace
 using {{ApplicationAuthNamespace}};
 using {{DomainAuthNamespace}};
 using Wolverine;

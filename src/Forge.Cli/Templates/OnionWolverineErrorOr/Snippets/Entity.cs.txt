@@ -1,4 +1,4 @@
-// Tokens: Usings, Namespace, Entity, Properties
+// forge:tokens Usings, Namespace, Entity, Properties
 {{Usings}}namespace {{Namespace}};
 
 public class {{Entity}}

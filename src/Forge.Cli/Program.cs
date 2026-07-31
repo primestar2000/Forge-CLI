@@ -217,6 +217,10 @@ root.Subcommands.Add(makeRepo);
 root.Subcommands.Add(InitCommand.Build());
 root.Subcommands.Add(DoctorCommand.Build());
 
+// ------------------------------------------------------------------------------- stub:*
+root.Subcommands.Add(StubCommands.BuildPublish());
+root.Subcommands.Add(StubCommands.BuildDiff());
+
 // ---------------------------------------------------------------------------- config:show
 var configShow = new Command("config:show", "Print the resolved forge.config.json and the detected solution root.");
 configShow.WithGlobals();
