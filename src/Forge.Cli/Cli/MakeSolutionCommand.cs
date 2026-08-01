@@ -29,7 +29,11 @@ public static class MakeSolutionCommand
         new("--scheduler") { Description = "wolverine (default), hangfire or quartz." };
 
     private static readonly Option<string> FrameworkOption =
-        new("--framework", "-f") { Description = "Target framework for generated projects. Defaults to net8.0." };
+        new("--framework", "-f")
+        {
+            Description = $"Target framework for generated projects. Defaults to {SolutionSpec.DefaultTargetFramework} " +
+                          "(the runtime forge is running on, so the result is guaranteed runnable)."
+        };
 
     private static readonly Option<bool> PinForgeOption =
         new("--pin-forge")
@@ -75,7 +79,7 @@ public static class MakeSolutionCommand
             Directory: root,
             RoleGuardStyle: Or(parse.GetValue(RoleGuardOption), "single-array"),
             Scheduler: Or(parse.GetValue(SchedulerOption), "wolverine"),
-            TargetFramework: Or(parse.GetValue(FrameworkOption), "net8.0"),
+            TargetFramework: Or(parse.GetValue(FrameworkOption), SolutionSpec.DefaultTargetFramework),
             RoleEnum: "UserRole",
             DbContextName: null,
             PinForge: parse.GetValue(PinForgeOption));

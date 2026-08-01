@@ -36,6 +36,7 @@ public sealed class ForgeConfig
     public string InfrastructureRepoPath { get; set; } = "Persistence/Repository";
     public string InfrastructureUnitOfWorkImplPath { get; set; } = "Persistence/Repository/Common/UnitOfWork.cs";
     public string InfrastructureConfigurationsPath { get; set; } = "Persistence/Configurations";
+    public string InfrastructureMigrationsPath { get; set; } = "Persistence/Migrations";
     public string InfrastructureJobsPath { get; set; } = "BackgroundJobs";
     public string InfrastructureNamespace { get; set; } = "";
 

@@ -17,6 +17,19 @@ public sealed record SolutionSpec(
         string.IsNullOrWhiteSpace(DbContextName) ? $"{Name}DbContext" : DbContextName!;
 
     /// <summary>
+    /// Default TFM for GENERATED projects: the major version forge is actually running on.
+    ///
+    /// Deliberately different from the tool's own net8.0 target. Generated apps get RUN — by
+    /// `dotnet ef` when it loads the startup project, and by the developer. Pinning them to an
+    /// LTS the machine may not have installed produces projects that build but cannot launch:
+    /// observed on a machine with ASP.NET Core 6 and 10 but not 8, where every db:* command
+    /// failed with "To install missing framework". Because forge rolls forward, the runtime it
+    /// is running on is by definition present.
+    /// </summary>
+    public static string DefaultTargetFramework =>
+        Environment.Version.Major >= 8 ? $"net{Environment.Version.Major}.0" : "net8.0";
+
+    /// <summary>
     /// Deterministic project GUID derived from the project name.
     ///
     /// Deliberately NOT Guid.NewGuid(): re-running make:solution must produce byte-identical

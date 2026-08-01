@@ -15,8 +15,15 @@ public abstract record FileAction(string Path)
     /// </summary>
     public sealed record Patch(string Path, string Before, string After) : FileAction(Path);
 
-    /// <summary>Nothing to do, with a human-readable reason (already exists, already wired, ...).</summary>
-    public sealed record Skip(string Path, string Reason) : FileAction(Path);
+    /// <summary>
+    /// Nothing to do, with a human-readable reason (already exists, already wired, ...).
+    ///
+    /// <paramref name="Protected"/> marks the specific case where forge REFUSED a write the user
+    /// asked for, because the target had been edited since generation. That is materially
+    /// different from an ordinary "already exists" skip and is surfaced as exit code 4 so a
+    /// pipeline notices rather than assuming the overwrite happened.
+    /// </summary>
+    public sealed record Skip(string Path, string Reason, bool Protected = false) : FileAction(Path);
 
     public string Kind => this switch
     {

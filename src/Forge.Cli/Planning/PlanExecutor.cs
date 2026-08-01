@@ -19,6 +19,33 @@ public sealed class PlanExecutor
 {
     private const string TempSuffix = ".forge-tmp";
 
+    /// <summary>
+    /// Applies a plan. When <paramref name="manifest"/> is supplied, the hash of every created
+    /// file is recorded so a later --force can tell untouched output from edited work.
+    /// </summary>
+    public ExecutionResult Apply(GenerationPlan plan, GeneratedManifest? manifest, string commandName)
+    {
+        var result = Apply(plan);
+        if (!result.Ok || manifest is null) return result;
+
+        foreach (var create in plan.Actions.OfType<FileAction.Create>())
+            manifest.Record(create.Path, create.Content, commandName);
+
+        try
+        {
+            var directory = Path.GetDirectoryName(manifest.Path);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            File.WriteAllText(manifest.Path, manifest.Serialise());
+        }
+        catch
+        {
+            // The files are already written and correct. A manifest that could not be saved
+            // degrades --force to conservative behaviour; it must not fail the command.
+        }
+
+        return result;
+    }
+
     public ExecutionResult Apply(GenerationPlan plan)
     {
         var conflicts = plan.ConflictingPaths;

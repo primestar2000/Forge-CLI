@@ -8,8 +8,24 @@
 
   <ItemGroup>
     <PackageReference Include="ErrorOr" Version="2.0.1" />
-    <!-- 8.x to match Infrastructure - see the note there on the Wolverine/EF Core 9 conflict. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.11" />
+    <!-- SQLite, not InMemory: InMemory is not a relational provider, so it cannot resolve
+         IMigrator and every db:* command fails with "no database provider has been configured".
+         SQLite needs no server, creates its file on demand, and supports migrations - so the
+         scaffold is both runnable AND migratable with no setup. Swap for SqlServer/Npgsql later.
+         8.x to match Infrastructure - see the note there on the Wolverine/EF Core 9 conflict. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+    <!-- Pinned to override the transitive SQLitePCLRaw 2.1.6, which carries a known high-severity
+         advisory (NU1903 / GHSA-2m69-gcr7-jv3q). Scaffolding a vulnerable dependency into every
+         new solution is not acceptable; 3.0.5 is clean. Caught by the compile gate's
+         zero-warning policy. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <!-- The EF Core tools require Design on the STARTUP project, which is this one. Infrastructure
+         references it with PrivateAssets=all so it does not flow through - without this, every
+         db:* command fails with "Your startup project doesn't reference ...Design". -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="WolverineFx" Version="3.6.1" />
   </ItemGroup>
 

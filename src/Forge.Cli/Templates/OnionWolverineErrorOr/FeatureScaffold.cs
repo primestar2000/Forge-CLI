@@ -80,7 +80,7 @@ internal static class FeatureScaffold
 
         // ---- message record -------------------------------------------------------------
         var messagePath = ctx.PathIn(config.ApplicationProject, relativeDir, $"{message}.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, messagePath, () => ctx.Render("Message.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(messagePath, () => ctx.Render("Message.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System"),
@@ -94,7 +94,7 @@ internal static class FeatureScaffold
 
         // ---- handler --------------------------------------------------------------------
         var handlerPath = ctx.PathIn(config.ApplicationProject, relativeDir, $"{message}Handler.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, handlerPath, () => ctx.Render("MessageHandler.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(handlerPath, () => ctx.Render("MessageHandler.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System", "System.Threading", "System.Threading.Tasks"),
@@ -110,7 +110,7 @@ internal static class FeatureScaffold
 
         // ---- validator ------------------------------------------------------------------
         var validatorPath = ctx.PathIn(config.ApplicationProject, relativeDir, $"{message}Validator.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, validatorPath, () => ctx.Render("MessageValidator.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(validatorPath, () => ctx.Render("MessageValidator.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System"),
@@ -254,11 +254,4 @@ internal static class FeatureScaffold
         return sb.ToString();
     }
 
-    private static GenerationPlan CreateOrSkip(TemplateContext ctx, string path, Func<string> content)
-    {
-        if (File.Exists(path) && !ctx.Force)
-            return GenerationPlan.Of(new FileAction.Skip(path, "already exists (use --force to overwrite)"));
-
-        return GenerationPlan.Of(new FileAction.Create(path, content()));
-    }
 }

@@ -225,6 +225,88 @@ public static class SyntaxPatcher
         return new PatchOutcome.Patched(updated.ToFullString());
     }
 
+    /// <summary>
+    /// Appends "services.AddScoped&lt;IFoo, Foo&gt;();" to a registration method.
+    ///
+    /// Without this, make:repo adds a repository to the UnitOfWork constructor that nothing
+    /// registers, and the host fails to start at runtime. The solution still COMPILES, so the
+    /// compile gate cannot catch it — hence the explicit patch.
+    /// </summary>
+    public static PatchOutcome AddServiceRegistration(
+        string source,
+        string className,
+        string methodName,
+        string serviceType,
+        string implementationType,
+        IReadOnlyList<string> requiredUsings,
+        string newLine,
+        string indentUnit)
+    {
+        var root = Parse(source);
+
+        var cls = root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+
+        if (cls is null)
+            return new PatchOutcome.Failed(
+                $"Could not find class '{className}'." + Environment.NewLine +
+                $"  -> Register '{serviceType}' manually, or re-scaffold with make:solution.");
+
+        var method = cls.Members
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+
+        if (method?.Body is null)
+            return new PatchOutcome.Failed(
+                $"'{className}.{methodName}' has no block body to append a registration to." +
+                $"{Environment.NewLine}  -> Add 'services.AddScoped<{serviceType}, {implementationType}>();' manually.");
+
+        if (HasGenericInvocation(method.Body, "AddScoped", serviceType, implementationType))
+            return new PatchOutcome.AlreadyPresent($"{serviceType} is already registered in {className}.{methodName}");
+
+        var statement = SyntaxFactory.ParseStatement(
+            $"services.AddScoped<{serviceType}, {implementationType}>();");
+
+        // Insert before the trailing "return services;" so the method still reads top-to-bottom.
+        var returnStatement = method.Body.Statements.OfType<ReturnStatementSyntax>().LastOrDefault();
+        var anchor = (StatementSyntax?)returnStatement
+            ?? method.Body.Statements.LastOrDefault();
+
+        BlockSyntax newBody;
+        if (anchor is null)
+        {
+            var indent = TriviaPreserver.IndentOf(method) + indentUnit;
+            newBody = method.Body.WithStatements(
+                SyntaxFactory.SingletonList(statement.AtIndent(indent, newLine)));
+        }
+        else if (returnStatement is not null)
+        {
+            newBody = method.Body.WithStatements(
+                method.Body.Statements.Insert(
+                    method.Body.Statements.IndexOf(anchor),
+                    statement.AsSiblingOf(anchor, newLine)));
+        }
+        else
+        {
+            newBody = method.Body.WithStatements(
+                method.Body.Statements.Add(statement.AsSiblingOf(anchor, newLine)));
+        }
+
+        var updated = root.ReplaceNode(method.Body, newBody);
+        foreach (var ns in requiredUsings) updated = EnsureUsing(updated, ns, newLine);
+
+        return new PatchOutcome.Patched(updated.ToFullString());
+    }
+
+    private static bool HasGenericInvocation(BlockSyntax body, string name, string first, string second) =>
+        body.DescendantNodes()
+            .OfType<GenericNameSyntax>()
+            .Any(g => g.Identifier.Text == name
+                   && g.TypeArgumentList.Arguments.Count == 2
+                   && g.TypeArgumentList.Arguments[0].ToString() == first
+                   && g.TypeArgumentList.Arguments[1].ToString() == second);
+
     private static bool HasRegistration(BlockSyntax body, string sourceType, string destinationType) =>
         body.DescendantNodes()
             .OfType<GenericNameSyntax>()

@@ -26,7 +26,7 @@ internal static class EntityScaffold
 
         // ---- 1. Domain entity -----------------------------------------------------------
         var entityPath = ctx.PathIn(config.DomainProject, config.DomainEntitiesPath, $"{name}.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, entityPath, () => ctx.Render("Entity.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(entityPath, () => ctx.Render("Entity.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System"),
@@ -37,7 +37,7 @@ internal static class EntityScaffold
 
         // ---- 2. EF Core configuration ---------------------------------------------------
         var configPath = ctx.PathIn(config.InfrastructureProject, config.InfrastructureConfigurationsPath, $"{name}Configuration.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, configPath, () => ctx.Render("EntityConfiguration.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(configPath, () => ctx.Render("EntityConfiguration.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System"),
@@ -120,11 +120,4 @@ internal static class EntityScaffold
         return sb.ToString();
     }
 
-    private static GenerationPlan CreateOrSkip(TemplateContext ctx, string path, Func<string> content)
-    {
-        if (File.Exists(path) && !ctx.Force)
-            return GenerationPlan.Of(new FileAction.Skip(path, "already exists (use --force to overwrite)"));
-
-        return GenerationPlan.Of(new FileAction.Create(path, content()));
-    }
 }

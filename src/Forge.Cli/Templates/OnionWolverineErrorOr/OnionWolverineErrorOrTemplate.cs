@@ -69,7 +69,7 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
         // ---- 1. I{Entity}Repository ------------------------------------------------------
         var interfacePath = ctx.PathIn(config.ApplicationProject, config.ApplicationRepoPath, $"{repoInterface}.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, interfacePath, () => ctx.Render("RepositoryInterface.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(interfacePath, () => ctx.Render("RepositoryInterface.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System", "System.Collections.Generic", "System.Threading", "System.Threading.Tasks"),
@@ -82,7 +82,7 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
         // ---- 2. {Entity}Repository -------------------------------------------------------
         var classPath = ctx.PathIn(config.InfrastructureProject, config.InfrastructureRepoPath, $"{NameHelper.RepositoryClass(name)}.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, classPath, () => ctx.Render("Repository.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(classPath, () => ctx.Render("Repository.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System", "System.Collections.Generic", "System.Linq", "System.Threading", "System.Threading.Tasks"),
@@ -99,7 +99,7 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
         // ---- 3. Errors.{Entity}.cs -------------------------------------------------------
         var errorsPath = ctx.PathIn(config.ApplicationProject, config.ApplicationErrorsPath, $"Errors.{name}.cs");
-        plan = plan.Concat(CreateOrSkip(ctx, errorsPath, () => ctx.Render("Errors.cs.txt",
+        plan = plan.Concat(ctx.CreateOrSkip(errorsPath, () => ctx.Render("Errors.cs.txt",
             new Dictionary<string, string>
             {
                 ["Usings"] = ctx.Usings("System"),
@@ -128,6 +128,28 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
 
         if (!uowImpl.Ok) return Task.FromResult(uowImpl);
         plan = plan.Concat(uowImpl.Plan);
+
+        // ---- 6. DI registration ----------------------------------------------------------
+        // The repository is now a UnitOfWork constructor dependency. Without a registration the
+        // solution still compiles but the host fails to start — invisible to the compile gate.
+        var registrationFile = ctx.PathIn(config.InfrastructureProject, "DependencyInjection.cs");
+        if (File.Exists(registrationFile))
+        {
+            var registration = PatchFile(ctx, registrationFile, "infrastructureProject", source =>
+                SyntaxPatcher.AddServiceRegistration(
+                    source, "DependencyInjection", "AddInfrastructure",
+                    repoInterface, NameHelper.RepositoryClass(name),
+                    [appRepoNamespace, infraRepoNamespace],
+                    ctx.CodeStyle.NewLine, ctx.CodeStyle.IndentUnit));
+
+            if (!registration.Ok) return Task.FromResult(registration);
+            plan = plan.Concat(registration.Plan);
+        }
+        else
+        {
+            plan = plan.With(new FileAction.Skip(registrationFile,
+                $"not found - register {repoInterface} manually in your DI setup"));
+        }
 
         return Task.FromResult(PlanResult.Success(plan));
     }
@@ -207,13 +229,6 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
             t.Kind is SyntaxKind.ClassDeclaration or SyntaxKind.RecordDeclaration
                    or SyntaxKind.StructDeclaration or SyntaxKind.RecordStructDeclaration);
 
-    private static GenerationPlan CreateOrSkip(TemplateContext ctx, string path, Func<string> content)
-    {
-        if (File.Exists(path) && !ctx.Force)
-            return GenerationPlan.Of(new FileAction.Skip(path, "already exists (use --force to overwrite)"));
-
-        return GenerationPlan.Of(new FileAction.Create(path, content()));
-    }
 
     private static PlanResult PatchFile(
         TemplateContext ctx,

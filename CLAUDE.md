@@ -95,8 +95,24 @@ These are the tool's contract with its users. A change that violates one is a bu
 else it improves.
 
 1. **Never overwrite hand-written code.** A generator hitting an existing target is a no-op plus a
-   warning, never a silent overwrite. `--force` is the only override, and even it must refuse files
-   whose hash has drifted from the generated original unless `--overwrite-modified` is also passed.
+   warning, never a silent overwrite. This is enforced by `.forge/manifest.json`, which records the
+   content hash of every fully-generated file:
+
+   | State | `--force` | `--force --overwrite-modified` |
+   |---|---|---|
+   | Hash matches the manifest (untouched output) | overwrites | overwrites |
+   | Hash differs (someone edited it) | **refuses**, exit 4 | overwrites |
+   | No manifest entry (unknown provenance) | **refuses**, exit 4 | overwrites |
+
+   Every generator goes through `TemplateContext.CreateOrSkip` — do not reimplement this check.
+   A refusal is a `FileAction.Skip { Protected = true }`, which surfaces as exit code 4 so a
+   pipeline never mistakes "we protected you" for "we overwrote it".
+
+   Only `Create` targets are tracked. Patched files (`IUnitOfWork`, `DbContext`,
+   `DependencyInjection`, Mapster configs) are co-owned with the developer by design, and patches
+   are additive and idempotent, so they are never rewritten wholesale.
+
+   **`.forge/manifest.json` must be committed** — it is what makes `--force` safe for the whole team.
 2. **Plan, then apply — never write from a generator.** Generators return `GenerationPlan`. Only
    `PlanExecutor` touches disk. This is what makes `--dry-run` honest.
 3. **All-or-nothing per command.** A command that writes 8 files writes 0 or 8. Stage to temp files,
@@ -224,8 +240,12 @@ construction. Cost is a build plus host startup (~2–5s) — the same trade `do
    `Microsoft.Extensions.Hosting.Abstractions` and in-box `System.Text.Json`, nothing more. Put
    Wolverine-specific code in a separate `Forge.Runtime.Wolverine` package. A runtime package that
    causes conflicts defeats its own purpose.
-4. **`make:solution` pins forge into the tool manifest** it creates — otherwise every user has to
-   remember to, and half won't.
+4. **`make:solution` must NOT write a tool manifest by default** — it is opt-in via `--pin-forge`.
+   Pinning is good practice in principle, but a manifest takes precedence over a global install:
+   from the moment it exists, `dotnet forge` resolves the LOCAL tool. If that exact version is not
+   restorable from a configured feed, the very next forge command dies with *"Run dotnet tool
+   restore"* — so writing it by default bricks forge in the solution it just created. Observed in
+   testing; a stale NuGet cache entry masked it by silently resolving an older binary.
 5. **`forge doctor --check`** returns nonzero for CI, so a broken environment fails the pipeline
    instead of producing half-scaffolded code.
 
@@ -304,12 +324,23 @@ Changing one of these is a breaking change. Add new codes rather than repurposin
 ## Commands
 
 ```bash
-dotnet build                                     # build
-dotnet test                                      # all tests
-dotnet test --filter Category=Roslyn             # the adversarial corpus — run on any Roslyn change
-dotnet test --filter Category=Compile            # slow: scaffold to temp + dotnet build
-dotnet pack ./src/Forge.Cli -o ./nupkg           # produce the tool package
+dotnet build                                     # build (warnings are errors)
+dotnet test --filter "Category!=Compile"         # fast suite: plans + Roslyn. ~1s. Run constantly.
+dotnet test --filter "Category=Roslyn"           # the adversarial corpus — run on any Roslyn change
+dotnet test --filter "Category=Compile"          # THE GATE: scaffold to temp + real dotnet build. ~70s.
+dotnet pack ./src/Forge.Cli -c Release -o ./nupkg
 ```
+
+**Run the compile gate before calling any generator change done.** Nearly every genuine defect in
+this codebase was caught there and was invisible to plan-level tests: a NuGet version conflict
+(EF Core 9 vs Wolverine), a missing `using` on a patched file, a missing package reference for
+`ToTable`, an ambiguous method-group conversion, and a namespace/type collision. A `GenerationPlan`
+assertion cannot see any of those — only the compiler can.
+
+The gate asserts **zero warnings as well as zero errors**: warnings are how a code-style mismatch
+surfaces (CS8618 on a non-nullable property, an unused using, an async method with no await).
+
+To manually verify the packaged tool end to end, see `/forge-verify`.
 
 Local install for manual testing:
 

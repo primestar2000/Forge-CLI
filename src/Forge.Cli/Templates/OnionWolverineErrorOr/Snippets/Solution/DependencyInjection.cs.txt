@@ -1,0 +1,20 @@
+// forge:tokens Namespace, UnitOfWorkInterfaceNamespace, InfraPersistenceNamespace
+using Microsoft.Extensions.DependencyInjection;
+using {{InfraPersistenceNamespace}};
+using {{UnitOfWorkInterfaceNamespace}};
+
+namespace {{Namespace}};
+
+/// <summary>
+/// Infrastructure service registrations.
+/// 'forge make:repo -i &lt;Entity&gt;' appends the repository registration here automatically.
+/// </summary>
+public static class DependencyInjection
+{
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
+    {
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        return services;
+    }
+}

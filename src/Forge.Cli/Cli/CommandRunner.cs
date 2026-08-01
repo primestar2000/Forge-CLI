@@ -43,7 +43,12 @@ public static class CommandRunner
 
         var codeStyle = CodeStyle.Detect(Path.Combine(root, config.ApplicationProject));
         var stubs = new StubRepository(root, config.StubOverridesPath, template.SnippetFolder);
-        var context = new TemplateContext(config, root, codeStyle, stubs, force);
+        var manifest = GeneratedManifest.Load(root);
+        var context = new TemplateContext(config, root, codeStyle, stubs, force)
+        {
+            Manifest = manifest,
+            OverwriteModified = parse.GetValue(GlobalOptions.OverwriteModified)
+        };
 
         PlanResult result;
         try
@@ -72,15 +77,18 @@ public static class CommandRunner
             return ExitCodes.Success;
         }
 
-        var execution = new PlanExecutor().Apply(result.Plan);
+        var execution = new PlanExecutor().Apply(result.Plan, manifest, commandName);
         if (!execution.Ok)
         {
             return Fail(output, commandName, execution.ExitCode, execution.Error!, root);
         }
 
-        // Everything skipped means "already done" — benign, but distinguishable from success
-        // so a pipeline can tell a re-run from real work.
-        var exitCode = result.Plan.IsEntirelySkipped ? ExitCodes.TargetExists : ExitCodes.Success;
+        // Everything skipped means "already done" — benign, but distinguishable from success so a
+        // pipeline can tell a re-run from real work. A protected skip means forge actively
+        // REFUSED a requested write, which must never be silently reported as full success.
+        var exitCode = result.Plan.IsEntirelySkipped || result.Plan.HasProtectedSkips
+            ? ExitCodes.TargetExists
+            : ExitCodes.Success;
 
         if (json)
         {

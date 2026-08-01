@@ -17,13 +17,20 @@ public static class GlobalOptions
     public static readonly Option<bool> Json =
         new("--json") { Description = "Emit machine-readable JSON instead of the human summary." };
 
+    public static readonly Option<bool> OverwriteModified =
+        new("--overwrite-modified")
+        {
+            Description = "With --force, also overwrite files edited since forge generated them. " +
+                          "Without this, --force only replaces untouched output."
+        };
+
     public static readonly Option<bool> NoColor =
         new("--no-color") { Description = "Suppress ANSI colour (NO_COLOR is also honoured)." };
 
     public static readonly Option<string> Verbosity =
         new("--verbosity", "-v") { Description = "Output detail: q[uiet], m[inimal], d[etailed]." };
 
-    public static IReadOnlyList<Option> All => [Force, DryRun, Json, NoColor, Verbosity];
+    public static IReadOnlyList<Option> All => [Force, OverwriteModified, DryRun, Json, NoColor, Verbosity];
 
     public static Command WithGlobals(this Command command)
     {

@@ -217,6 +217,9 @@ root.Subcommands.Add(makeRepo);
 root.Subcommands.Add(InitCommand.Build());
 root.Subcommands.Add(DoctorCommand.Build());
 
+// --------------------------------------------------------------------------------- db:*
+foreach (var command in DbCommands.Build()) root.Subcommands.Add(command);
+
 // ------------------------------------------------------------------------------- stub:*
 root.Subcommands.Add(StubCommands.BuildPublish());
 root.Subcommands.Add(StubCommands.BuildDiff());

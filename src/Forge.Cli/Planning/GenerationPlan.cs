@@ -22,6 +22,9 @@ public sealed record GenerationPlan(IReadOnlyList<FileAction> Actions)
     /// <summary>True when every action is a Skip — i.e. the command was a complete no-op.</summary>
     public bool IsEntirelySkipped => Actions.Count > 0 && Actions.All(a => a is FileAction.Skip);
 
+    /// <summary>True when forge refused a write to protect a file edited since generation.</summary>
+    public bool HasProtectedSkips => Actions.Any(a => a is FileAction.Skip { Protected: true });
+
     public IEnumerable<FileAction> Writes =>
         Actions.Where(a => a is FileAction.Create or FileAction.Patch);
 

@@ -1,4 +1,4 @@
-// forge:tokens ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfraPersistenceNamespace,
+// forge:tokens ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfrastructureNamespace,
 // forge:tokens DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
 using Microsoft.EntityFrameworkCore;
 using Wolverine;
@@ -6,22 +6,25 @@ using {{ApiMiddlewareNamespace}};
 using {{ApplicationAuthNamespace}};
 using {{ApplicationPersistenceNamespace}};
 using {{DbContextNamespace}};
-using {{InfraPersistenceNamespace}};
+using {{InfrastructureNamespace}};
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// Swap for UseSqlServer/UseNpgsql once a real connection string exists.
+// SQLite by default: no server to install, and unlike InMemory it is a relational provider, so
+// migrations work out of the box. Swap for UseSqlServer/UseNpgsql when you have one.
 builder.Services.AddDbContext<{{DbContextName}}>(options =>
-    options.UseInMemoryDatabase("{{Solution}}"));
+    options.UseSqlite(builder.Configuration.GetConnectionString("Default")
+                      ?? "Data Source={{Solution}}.db"));
 
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
 builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
 
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+// Repositories and IUnitOfWork. make:repo appends new registrations to AddInfrastructure.
+builder.Services.AddInfrastructure();
 
 builder.Host.UseWolverine(options =>
 {

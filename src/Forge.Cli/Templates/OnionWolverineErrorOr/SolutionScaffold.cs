@@ -159,6 +159,14 @@ internal static class SolutionScaffold
                 ["DbContextNamespace"] = dbContextNs
             }));
 
+        plan = Add(plan, Path.Combine(infraDir, "DependencyInjection.cs"),
+            ctx.Render("Solution/DependencyInjection.cs.txt", new Dictionary<string, string>
+            {
+                ["Namespace"] = infraNs,
+                ["UnitOfWorkInterfaceNamespace"] = appPersistenceNs,
+                ["InfraPersistenceNamespace"] = infraPersistenceNs
+            }));
+
         // ---- API ------------------------------------------------------------------------
         // The middleware CONSUMES the marker interfaces, so it must vary with roleGuardStyle too.
         // Emitting the single-array middleware alongside role-and-subrole markers produces a
@@ -197,7 +205,7 @@ internal static class SolutionScaffold
                 ["ApiMiddlewareNamespace"] = apiMiddlewareNs,
                 ["ApplicationAuthNamespace"] = appAuthNs,
                 ["ApplicationPersistenceNamespace"] = appPersistenceNs,
-                ["InfraPersistenceNamespace"] = infraPersistenceNs,
+                ["InfrastructureNamespace"] = infraNs,
                 ["DbContextNamespace"] = dbContextNs,
                 ["DbContextName"] = spec.ResolvedDbContextName
             }));
