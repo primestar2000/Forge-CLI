@@ -65,10 +65,22 @@ internal static class SolutionScaffold
             ["ApiGuid"] = SolutionSpec.ProjectGuid($"{s}.API")
         }));
 
+        // Tier 2 is OPT-IN, for the same reason the tool manifest is: a PackageReference to a
+        // version that is not restorable from a configured feed makes the generated solution fail
+        // to restore, and make:solution must never emit a solution that cannot build. doctor
+        // reports Tier 2 as unavailable and prints the exact `dotnet add package` command.
+        // Runtime and CLI ship in lockstep, so the CLI's version is the right default; they only
+        // ever have to agree on the JSON envelope schema, not on assembly versions.
+        var runtimeReference = spec.WithRuntime
+            ? $"    <!-- Tier 2: enables db:seed and invoke:*. -->{Environment.NewLine}" +
+              $"    <PackageReference Include=\"Pitechy.Forge.Runtime\" Version=\"{ForgeVersion.Current}\" />"
+            : string.Empty;
+
         var projectModel = new Dictionary<string, string>
         {
             ["Solution"] = s,
-            ["TargetFramework"] = spec.TargetFramework
+            ["TargetFramework"] = spec.TargetFramework,
+            ["ForgeRuntimeReference"] = runtimeReference
         };
 
         plan = Add(plan, Path.Combine(domainDir, $"{s}.Domain.csproj"), ctx.RenderRaw("Solution/Domain.csproj.txt", projectModel));
@@ -207,7 +219,15 @@ internal static class SolutionScaffold
                 ["ApplicationPersistenceNamespace"] = appPersistenceNs,
                 ["InfrastructureNamespace"] = infraNs,
                 ["DbContextNamespace"] = dbContextNs,
-                ["DbContextName"] = spec.ResolvedDbContextName
+                ["DbContextName"] = spec.ResolvedDbContextName,
+                ["ForgeRuntimeUsing"] = spec.WithRuntime ? "using Forge.Runtime;" + Environment.NewLine : string.Empty,
+                ["ForgeRuntimeHook"] = spec.WithRuntime
+                    ? Environment.NewLine +
+                      "// forge hook. No-op on a normal start; short-circuits only when forge launched" + Environment.NewLine +
+                      "// this process with a --forge:<verb> argument, so seeders run against the real" + Environment.NewLine +
+                      "// container without the web server ever binding a port." + Environment.NewLine +
+                      "if (await app.RunForgeRuntimeAsync(args)) return;" + Environment.NewLine
+                    : string.Empty
             }));
 
         // ---- forge.config.json ----------------------------------------------------------

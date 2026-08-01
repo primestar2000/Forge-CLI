@@ -163,9 +163,29 @@ Forge.Runtime/                    # companion package the USER's app references
 
 **Why `Forge.Runtime` exists:** `forge` cannot load the user's assemblies into its own process
 (version/TFM/deps.json conflicts — DESIGN-REVIEW.md BLOCKER-1). Instead `invoke:*`, `db:seed`, and
-tier-2 `route:list` shell out to the user's app with a `--forge:<verb>` sentinel argument;
-`AddForgeRuntime()` intercepts it, does the work inside the real DI container, writes JSON to
-stdout, and exits. `forge` parses that JSON and renders it.
+runtime-mode `route:list` shell out to the user's app with a `--forge:<verb>` sentinel argument.
+
+The hook is one line in their `Program.cs`, placed **before** `app.Run()` so the web server never
+binds a port — running `db:seed` while the app is already running cannot collide:
+
+```csharp
+var app = builder.Build();
+if (await app.RunForgeRuntimeAsync(args)) return;   // no-op on a normal start
+app.Run();
+```
+
+The wire contract is **versioned JSON wrapped in `<<<FORGE-RESULT>>>` markers**, never shared
+types. Markers because the payload shares stdout with the app's own logging; JSON-not-types because
+a shared type would reintroduce exactly the version coupling the process boundary exists to avoid.
+Version skew between `Forge.Cli` and `Forge.Runtime` is therefore a non-issue by construction.
+
+`Forge.Runtime` is **opt-in** (`make:solution --with-runtime`) for the same reason the tool manifest
+is: a `PackageReference` to a version that isn't restorable makes the generated solution fail to
+restore, and `make:solution` must never emit a solution that cannot build.
+
+Errors cross the boundary as data, never as a crash. Throw `ForgeRuntimeException` for expected,
+actionable conditions — it travels as a bare message; anything else keeps its stack trace, because
+for a real bug the trace is the useful part.
 
 `route:list` has two modes. **Metadata mode** (no companion package required) uses
 `MetadataLoadContext` — reflection-only, never executes user code. It sees attribute-routed

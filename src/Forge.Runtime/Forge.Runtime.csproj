@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      Multi-targeted because this package is a PackageReference in the USER's application, unlike
+      Forge.Cli which is a standalone tool. It must match whatever they target, not the other way
+      round. A runtime package that forces a framework upgrade defeats its own purpose.
+    -->
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Forge.Runtime</RootNamespace>
+    <AssemblyName>Forge.Runtime</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pitechy.Forge.Runtime</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Pitechy</Authors>
+    <Company>Pitechy</Company>
+    <Description>
+      Companion runtime for the forge CLI. Lets forge run seeders and invoke handlers inside your
+      application's own process and DI container. Optional: only needed for invoke:*, db:seed and
+      runtime-mode route:list.
+    </Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      DELIBERATELY MINIMAL. This lands in the user's restore graph, so every dependency here is a
+      potential version conflict in their application. Hosting.Abstractions is interface-only and
+      System.Text.Json is in-box on every supported target.
+
+      Anything Wolverine-specific belongs in a separate Forge.Runtime.Wolverine package — do not
+      add a Wolverine reference here.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Forge.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

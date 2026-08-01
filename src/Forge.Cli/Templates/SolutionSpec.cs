@@ -11,7 +11,8 @@ public sealed record SolutionSpec(
     string TargetFramework,
     string RoleEnum,
     string? DbContextName,
-    bool PinForge = false)
+    bool PinForge = false,
+    bool WithRuntime = false)
 {
     public string ResolvedDbContextName =>
         string.IsNullOrWhiteSpace(DbContextName) ? $"{Name}DbContext" : DbContextName!;

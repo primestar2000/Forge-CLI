@@ -290,4 +290,22 @@ list.SetAction(parse =>
 
 root.Subcommands.Add(list);
 
-return root.Parse(args).Invoke();
+// Top-level guard. An unexpected exception must never reach the user as a raw stack trace:
+// forge edits source files, so an opaque crash is exactly when someone needs to know what state
+// their tree is in. Exit code 1 per the documented contract.
+try
+{
+    return root.Parse(args).Invoke();
+}
+catch (Exception ex)
+{
+    var output = new Output(json: false, noColor: args.Contains("--no-color"));
+    output.Failure($"x forge failed unexpectedly: {ex.Message}");
+    output.Dim("  No files were written by the failing command - PlanExecutor is all-or-nothing.");
+    output.Dim("  Re-run with --verbosity d for the full stack trace, or report this as a bug.");
+
+    if (args.Contains("-v") || args.Contains("--verbosity"))
+        output.Dim(ex.ToString());
+
+    return ExitCodes.Error;
+}

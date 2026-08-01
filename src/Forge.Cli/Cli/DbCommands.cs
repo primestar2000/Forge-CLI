@@ -42,6 +42,118 @@ public static class DbCommands
             (config, _) => EfTool.MigrationsList(config));
 
         yield return BuildFresh();
+        yield return BuildSeed();
+    }
+
+    private static readonly Option<string> OnlyOption =
+        new("--only") { Description = "Run just this seeder, by ISeeder.Name." };
+
+    private static readonly Option<bool> NoBuildOption =
+        new("--no-build") { Description = "Skip building the app first. Only when you know the output is fresh." };
+
+    /// <summary>
+    /// db:seed is Tier 2: seeders need the real DbContext from the real container, which only
+    /// exists inside the user's own process. forge therefore launches their app rather than
+    /// loading their assemblies — see RuntimeBridge.
+    /// </summary>
+    private static Command BuildSeed()
+    {
+        var command = new Command("db:seed", "Run registered ISeeder implementations inside your application.");
+        command.Options.Add(OnlyOption);
+        command.Options.Add(NoBuildOption);
+        command.WithGlobals();
+        command.SetAction(parse =>
+        {
+            var json = parse.GetValue(GlobalOptions.Json);
+            var output = new Output(json, parse.GetValue(GlobalOptions.NoColor));
+
+            var loaded = ConfigLoader.Load(Directory.GetCurrentDirectory());
+            if (!loaded.Ok)
+            {
+                if (json) output.Json(Payload("db:seed", loaded.ExitCode, null, loaded.Error));
+                else output.Failure($"x {loaded.Error}");
+                return loaded.ExitCode;
+            }
+
+            var config = loaded.Config!;
+            var root = loaded.SolutionRoot!;
+
+            if (!RuntimeBridge.IsReferenced(config, root))
+            {
+                var error = $"{RuntimeBridge.PackageId} is not referenced by {config.ApiProject}, " +
+                            "so db:seed is unavailable (Tier 2).";
+                if (json) output.Json(Payload("db:seed", ExitCodes.ConfigInvalid, null, error));
+                else
+                {
+                    output.Failure($"x {error}");
+                    output.Dim($"  -> dotnet add {config.ApiProject} package {RuntimeBridge.PackageId}");
+                    output.Dim("  -> then add to Program.cs, before app.Run():");
+                    output.Dim("       if (await app.RunForgeRuntimeAsync(args)) return;");
+                }
+                return ExitCodes.ConfigInvalid;
+            }
+
+            var arguments = new List<string>();
+            var only = parse.GetValue(OnlyOption);
+            if (!string.IsNullOrWhiteSpace(only)) { arguments.Add("--forge-only"); arguments.Add(only!); }
+
+            if (parse.GetValue(GlobalOptions.DryRun))
+            {
+                var display = $"dotnet run --project {config.ApiProject} -- --forge:seed {string.Join(" ", arguments)}".TrimEnd();
+                if (json) output.Json(Payload("db:seed", ExitCodes.Success, display));
+                else
+                {
+                    output.Info("Dry run - nothing was executed.");
+                    output.Dim($"  {display}");
+                }
+                return ExitCodes.Success;
+            }
+
+            if (!json) output.Dim($"  running seeders inside {config.ApiProject} ...");
+
+            var result = RuntimeBridge.Invoke(config, root, "seed", arguments,
+                parse.GetValue(NoBuildOption), output, verbose: !json);
+
+            if (!result.Ok)
+            {
+                if (json) output.Json(Payload("db:seed", ExitCodes.Error, null, result.Error));
+                else output.Failure($"x {result.Error}");
+                return ExitCodes.Error;
+            }
+
+            if (json)
+            {
+                output.Json(result.Payload!.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                return ExitCodes.Success;
+            }
+
+            RenderSeeders(output, result.Data);
+            return ExitCodes.Success;
+        });
+        return command;
+    }
+
+    private static void RenderSeeders(Output output, JsonNode? data)
+    {
+        if (data?["seeders"] is not JsonArray seeders || seeders.Count == 0)
+        {
+            output.Warn("No ISeeder implementations are registered.");
+            output.Dim("  -> services.AddScoped<ISeeder, MySeeder>();");
+            return;
+        }
+
+        foreach (var seeder in seeders.OfType<JsonObject>())
+        {
+            var name = seeder["name"]?.GetValue<string>() ?? "(unnamed)";
+            var milliseconds = seeder["milliseconds"]?.GetValue<int>() ?? 0;
+            var affected = seeder["affected"];
+
+            var detail = affected is null ? $"{milliseconds}ms" : $"{affected} record(s), {milliseconds}ms";
+            output.Success($"seeded   {name}  ({detail})");
+        }
+
+        output.Blank();
+        output.Info($"{seeders.Count} seeder(s) ran.");
     }
 
     private static Command Make(

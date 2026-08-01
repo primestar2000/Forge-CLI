@@ -1,6 +1,6 @@
 // forge:tokens ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfrastructureNamespace,
 // forge:tokens DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
-using Microsoft.EntityFrameworkCore;
+{{ForgeRuntimeUsing}}using Microsoft.EntityFrameworkCore;
 using Wolverine;
 using {{ApiMiddlewareNamespace}};
 using {{ApplicationAuthNamespace}};
@@ -33,7 +33,7 @@ builder.Host.UseWolverine(options =>
 });
 
 var app = builder.Build();
-
+{{ForgeRuntimeHook}}
 app.UseHttpsRedirection();
 app.MapControllers();
 

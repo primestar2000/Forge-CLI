@@ -35,6 +35,13 @@ public static class MakeSolutionCommand
                           "(the runtime forge is running on, so the result is guaranteed runnable)."
         };
 
+    private static readonly Option<bool> WithRuntimeOption =
+        new("--with-runtime")
+        {
+            Description = "Reference Pitechy.Forge.Runtime and wire the hook into Program.cs, " +
+                          "enabling db:seed and invoke:* (Tier 2)."
+        };
+
     private static readonly Option<bool> PinForgeOption =
         new("--pin-forge")
         {
@@ -47,7 +54,7 @@ public static class MakeSolutionCommand
         var command = new Command("make:solution",
             "Scaffold a full onion-architecture solution, wired and ready to build.");
 
-        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption })
+        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption, WithRuntimeOption })
             command.Options.Add(option);
 
         command.WithGlobals();
@@ -82,7 +89,8 @@ public static class MakeSolutionCommand
             TargetFramework: Or(parse.GetValue(FrameworkOption), SolutionSpec.DefaultTargetFramework),
             RoleEnum: "UserRole",
             DbContextName: null,
-            PinForge: parse.GetValue(PinForgeOption));
+            PinForge: parse.GetValue(PinForgeOption),
+            WithRuntime: parse.GetValue(WithRuntimeOption));
 
         // Stubs resolve against the solution being created, so a team can pre-seed .forge/stubs.
         var stubs = new StubRepository(root, ".forge/stubs", template.SnippetFolder);

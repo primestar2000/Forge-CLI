@@ -27,6 +27,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="WolverineFx" Version="3.6.1" />
+{{ForgeRuntimeReference}}
   </ItemGroup>
 
   <ItemGroup>
