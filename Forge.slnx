@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Forge.Cli/Forge.Cli.csproj" />
+    <Project Path="src/Forge.Runtime.Wolverine/Forge.Runtime.Wolverine.csproj" />
     <Project Path="src/Forge.Runtime/Forge.Runtime.csproj" />
   </Folder>
   <Folder Name="/tests/">

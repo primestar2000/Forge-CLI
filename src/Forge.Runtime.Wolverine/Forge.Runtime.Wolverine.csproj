@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Forge.Runtime.Wolverine</RootNamespace>
+    <AssemblyName>Forge.Runtime.Wolverine</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Pitechy.Forge.Runtime.Wolverine</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Pitechy</Authors>
+    <Company>Pitechy</Company>
+    <Description>
+      Wolverine support for the forge CLI: enables invoke:list and invoke:run to drive messages
+      through your real Wolverine pipeline. Separate from Pitechy.Forge.Runtime so applications
+      that do not use Wolverine never take the dependency.
+    </Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      This package exists SO THAT Wolverine never enters Forge.Runtime's dependency graph.
+      ArchitectureTests enforces that; adding WolverineFx to the core package would put it into
+      the restore graph of every consuming application, including those that do not use it.
+    -->
+    <PackageReference Include="WolverineFx" Version="3.6.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Forge.Runtime\Forge.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

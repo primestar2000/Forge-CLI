@@ -39,14 +39,7 @@ public static class ForgeRuntimeExtensions
 
         try
         {
-            var data = verb switch
-            {
-                "seed" => await RunSeedersAsync(host, args, cancellationToken),
-                _ => throw new ForgeRuntimeException(
-                    $"Pitechy.Forge.Runtime {typeof(ForgeRuntimeExtensions).Assembly.GetName().Version?.ToString(3)} " +
-                    $"does not support the verb '{verb}'." + Environment.NewLine +
-                    "  -> Upgrade the package: dotnet add package Pitechy.Forge.Runtime")
-            };
+            var data = await DispatchAsync(host, verb, args, cancellationToken);
 
             Console.Out.Write(ForgeEnvelope.Success(verb, data));
         }
@@ -64,6 +57,42 @@ public static class ForgeRuntimeExtensions
         return true;
     }
 
+    /// <summary>
+    /// Registered handlers win over the built-ins, so a satellite package can extend or replace
+    /// a verb without the core package knowing it exists.
+    /// </summary>
+    private static async Task<JsonNode?> DispatchAsync(
+        IHost host,
+        string verb,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        using var scope = host.Services.CreateScope();
+
+        var handler = scope.ServiceProvider
+            .GetServices<IForgeVerbHandler>()
+            .LastOrDefault(h => string.Equals(h.Verb, verb, StringComparison.OrdinalIgnoreCase));
+
+        if (handler is not null)
+            return await handler.HandleAsync(scope.ServiceProvider, args, cancellationToken);
+
+        if (string.Equals(verb, "seed", StringComparison.OrdinalIgnoreCase))
+            return await RunSeedersAsync(scope.ServiceProvider, args, cancellationToken);
+
+        // Naming the satellite package matters: "unsupported verb" alone leaves the user guessing
+        // whether they need an upgrade or a different package entirely.
+        var hint = verb.Equals("invoke", StringComparison.OrdinalIgnoreCase)
+                || verb.Equals("handlers", StringComparison.OrdinalIgnoreCase)
+            ? "  -> invoke:* needs the Wolverine satellite package:" + Environment.NewLine +
+              "       dotnet add package Pitechy.Forge.Runtime.Wolverine" + Environment.NewLine +
+              "       builder.Services.AddForgeWolverine();"
+            : "  -> Upgrade the package: dotnet add package Pitechy.Forge.Runtime";
+
+        throw new ForgeRuntimeException(
+            $"Pitechy.Forge.Runtime {typeof(ForgeRuntimeExtensions).Assembly.GetName().Version?.ToString(3)} " +
+            $"has no handler for the verb '{verb}'." + Environment.NewLine + hint);
+    }
+
     internal static string? FindVerb(string[] args)
     {
         foreach (var argument in args)
@@ -78,28 +107,16 @@ public static class ForgeRuntimeExtensions
         return null;
     }
 
-    internal static string? FindOption(string[] args, string name)
-    {
-        var flag = "--forge-" + name;
-        for (var i = 0; i < args.Length - 1; i++)
-        {
-            if (string.Equals(args[i], flag, StringComparison.Ordinal)) return args[i + 1];
-        }
-
-        return null;
-    }
+    internal static string? FindOption(string[] args, string name) => ForgeRuntimeArgs.Option(args, name);
 
     private static async Task<JsonNode> RunSeedersAsync(
-        IHost host,
+        IServiceProvider services,
         string[] args,
         CancellationToken cancellationToken)
     {
-        // A dedicated scope, because seeders almost always depend on a scoped DbContext.
-        using var scope = host.Services.CreateScope();
-
         var only = FindOption(args, "only");
 
-        var seeders = scope.ServiceProvider
+        var seeders = services
             .GetServices<ISeeder>()
             .OrderBy(s => s.Order)
             .ThenBy(s => s.Name, StringComparer.Ordinal)
@@ -113,7 +130,7 @@ public static class ForgeRuntimeExtensions
 
             if (seeders.Count == 0)
             {
-                var registered = scope.ServiceProvider.GetServices<ISeeder>().Select(s => s.Name).ToList();
+                var registered = services.GetServices<ISeeder>().Select(s => s.Name).ToList();
                 throw new ForgeRuntimeException(
                     $"No registered ISeeder named '{only}'." + Environment.NewLine +
                     (registered.Count == 0
