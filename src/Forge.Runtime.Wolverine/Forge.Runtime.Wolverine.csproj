@@ -12,15 +12,12 @@
 
   <PropertyGroup>
     <PackageId>Pitechy.Forge.Runtime.Wolverine</PackageId>
-    <Version>0.1.0</Version>
-    <Authors>Pitechy</Authors>
-    <Company>Pitechy</Company>
     <Description>
       Wolverine support for the forge CLI: enables invoke:list and invoke:run to drive messages
       through your real Wolverine pipeline. Separate from Pitechy.Forge.Runtime so applications
       that do not use Wolverine never take the dependency.
     </Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>forge;wolverine;cqrs;codegen;scaffolding;message-bus</PackageTags>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
   </PropertyGroup>
 

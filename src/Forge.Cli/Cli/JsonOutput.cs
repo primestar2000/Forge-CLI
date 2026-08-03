@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Forge.Cli.Planning;
@@ -52,6 +53,28 @@ public static class JsonOutput
 
 public static class ForgeVersion
 {
-    public static string Current =>
-        typeof(ForgeVersion).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    /// <summary>
+    /// The full NuGet version, INCLUDING any pre-release suffix.
+    ///
+    /// Assembly.GetName().Version cannot carry one — it would report 0.1.0 for a package published
+    /// as 0.1.0-preview.1. That matters because make:solution --with-runtime writes this value
+    /// into the generated csproj as the Forge.Runtime PackageReference version, so the wrong
+    /// answer produces a scaffolded solution that cannot restore.
+    /// </summary>
+    public static string Current { get; } = Resolve();
+
+    private static string Resolve()
+    {
+        var informational = typeof(ForgeVersion).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        if (!string.IsNullOrWhiteSpace(informational))
+        {
+            // Strip "+<source revision>" build metadata, which the SDK appends and NuGet rejects.
+            var plus = informational!.IndexOf('+');
+            return plus < 0 ? informational : informational[..plus];
+        }
+
+        return typeof(ForgeVersion).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    }
 }

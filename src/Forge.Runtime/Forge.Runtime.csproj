@@ -17,15 +17,12 @@
 
   <PropertyGroup>
     <PackageId>Pitechy.Forge.Runtime</PackageId>
-    <Version>0.1.0</Version>
-    <Authors>Pitechy</Authors>
-    <Company>Pitechy</Company>
     <Description>
       Companion runtime for the forge CLI. Lets forge run seeders and invoke handlers inside your
       application's own process and DI container. Optional: only needed for invoke:*, db:seed and
       runtime-mode route:list.
     </Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>forge;codegen;scaffolding;seeding;clean-architecture;cqrs</PackageTags>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
   </PropertyGroup>
 

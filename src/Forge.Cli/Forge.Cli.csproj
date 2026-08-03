@@ -20,11 +20,8 @@
     <!-- Before first publish, apply for "Pitechy.*" ID prefix reservation at account@nuget.org.
          A bare "Forge.*" reservation would be denied: it identifies no owner and is a common word. -->
     <PackageId>Pitechy.Forge.Cli</PackageId>
-    <Authors>Pitechy</Authors>
-    <Company>Pitechy</Company>
-    <Version>0.1.0</Version>
     <Description>Laravel-Artisan-style architectural code generator for ASP.NET Core.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>dotnet-tool;codegen;scaffolding;generator;clean-architecture;onion;wolverine;cqrs;roslyn;artisan</PackageTags>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
   </PropertyGroup>
 

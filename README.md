@@ -1,0 +1,129 @@
+# forge
+
+A Laravel-Artisan-style architectural code generator for .NET, invoked as `dotnet forge <namespace>:<verb>`.
+
+Scaffolds entities, repositories, Wolverine commands and queries, audience-shaped responses,
+authorization wiring, and whole solution skeletons — so nobody hand-writes boilerplate that a
+convention already dictates.
+
+```bash
+dotnet forge make:solution -n Shop
+dotnet forge make:entity   -n Order --properties "Reference:string,Total:decimal"
+dotnet forge make:repo     -i Order
+dotnet forge make:feature  -n PlaceOrder --type command --roles User --properties "Reference:string"
+dotnet build          # 0 warnings, 0 errors
+```
+
+That sequence writes 26 files and compiles clean. No hand-written code required.
+
+## Install
+
+The only prerequisite is the .NET SDK.
+
+```bash
+# try it without installing (.NET 10+)
+dnx Pitechy.Forge.Cli make:solution -n Shop
+
+# or pin it per-repo, so everyone generates identical output
+dotnet new tool-manifest
+dotnet tool install --local Pitechy.Forge.Cli
+```
+
+## Three principles
+
+**Never overwrite hand-written code.** A generator meeting an existing file skips it. `--force`
+overwrites only files whose content still matches what forge generated — `.forge/manifest.json`
+records a hash of every one. A file you have edited needs `--force --overwrite-modified`, and the
+refusal surfaces as exit code 4 so CI notices.
+
+**Plan, then apply.** Generators return a `GenerationPlan` and never touch disk; only the executor
+writes, staging to temp files and moving them together. So `--dry-run` shows exactly what would be
+written, a failure part-way through leaves nothing behind, and every command is all-or-nothing.
+
+**Edits are syntax-node surgery, never text.** Wiring a repository into `IUnitOfWork` parses the
+file with Roslyn, finds a stable anchor, and inserts a node. Regions, XML doc comments, reordered
+members, primary constructors — an adversarial corpus covers the shapes real code takes, and a
+patch that cannot be made safely refuses with a clear message instead of guessing.
+
+## The three packages
+
+| Package | What | How it's consumed |
+|---|---|---|
+| `Pitechy.Forge.Cli` | The `dotnet forge` tool | `dotnet tool install` — never a `PackageReference`, never in your app's restore graph |
+| `Pitechy.Forge.Runtime` | Runs seeders inside your app | `PackageReference`, optional |
+| `Pitechy.Forge.Runtime.Wolverine` | Adds `invoke:*` | `PackageReference`, only if you use Wolverine |
+
+Most of forge needs none of them:
+
+| Tier | Requires | Commands |
+|---|---|---|
+| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init` — ~80% of the tool |
+| 1 | `dotnet-ef` | `db:migrate`, `db:migration`, `db:rollback`, `db:status` |
+| 2 | `Forge.Runtime` | `db:seed`, `invoke:*` |
+
+Tier 0 is pure text-in, text-out and can never conflict with anything, so forge can be adopted on a
+legacy solution with no csproj changes at all. `forge doctor` reports which tier is available and
+prints the command to reach the next one.
+
+## Why tier 2 runs out of process
+
+To run a seeder or invoke a handler you need your types, your fully-built container, your Wolverine
+configuration, and every transitive dependency at *your* versions. Loading your assemblies into
+forge's process would fail on TFM mismatch and diamond conflicts — forge carries Roslyn and its own
+graph. So forge launches *your* app with a `--forge:<verb>` argument, `Forge.Runtime` intercepts it
+inside the real container, and the answer comes back as versioned JSON. The same trade `dotnet ef`
+makes, for the same reasons.
+
+One line in `Program.cs`, placed before `app.Run()` so the web server never binds a port:
+
+```csharp
+var app = builder.Build();
+if (await app.RunForgeRuntimeAsync(args)) return;   // no-op on a normal start
+app.Run();
+```
+
+`Forge.Runtime` refuses to run when the hosting environment is Production, and takes an `enabled:`
+parameter so you can disable it explicitly.
+
+## Adopting an existing solution
+
+```bash
+cd existing-solution
+dotnet forge init
+```
+
+`init` infers configuration from what is actually in the codebase — locating `IUnitOfWork` by its
+declaration rather than guessing at folders, reading the role-guard style from which marker
+interface exists, detecting the scheduler from package references. Every inference is printed with
+its evidence, and anything it could not determine is flagged rather than silently defaulted.
+
+## Customising the output
+
+```bash
+dotnet forge stub:publish
+```
+
+Copies the templates into `.forge/stubs/`. Edit them, commit them, and every subsequent generation
+uses your shape — a licence header, a different repository base, your own `Result<T>` instead of
+`ErrorOr<T>`. `stub:diff` performs a three-way comparison after a forge upgrade so customising is
+not a one-way door.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Unhandled error |
+| 2 | Usage / parse error |
+| 3 | Config missing or invalid |
+| 4 | Target exists, refused — benign; CI should not fail on this |
+| 5 | Anchor not found, patch aborted |
+| 6 | Refused by an environment guard |
+
+## No telemetry
+
+forge collects nothing, sends nothing, and phones home to nobody.
+
+## Licence
+
+MIT
