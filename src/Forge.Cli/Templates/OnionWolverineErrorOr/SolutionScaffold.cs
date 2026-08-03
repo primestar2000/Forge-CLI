@@ -220,6 +220,7 @@ internal static class SolutionScaffold
                 ["InfrastructureNamespace"] = infraNs,
                 ["DbContextNamespace"] = dbContextNs,
                 ["DbContextName"] = spec.ResolvedDbContextName,
+                ["CurrentUserRegistration"] = RenderCurrentUserRegistration(spec),
                 ["ForgeRuntimeUsing"] = spec.WithRuntime ? "using Forge.Runtime;" + Environment.NewLine : string.Empty,
                 ["ForgeRuntimeHook"] = spec.WithRuntime
                     ? Environment.NewLine +
@@ -263,4 +264,46 @@ internal static class SolutionScaffold
     }
 
     private static string ToConfigPath(string path) => path.Replace('\\', '/');
+
+    /// <summary>
+    /// Current-user registrations. Scoped normally — one identity per HTTP request, which is the
+    /// only correct lifetime for a web app.
+    ///
+    /// Under a forge invocation they become SINGLETONS, because that process handles exactly one
+    /// message and then exits. This is what makes `invoke:run --as-role Admin` work: Wolverine
+    /// creates a scope per message, so an identity applied to a scoped instance would never reach
+    /// the handler. Verified both ways — the same command is denied as Guest when scoped, and
+    /// succeeds when singleton.
+    ///
+    /// The branch is deliberately visible here rather than hidden inside CurrentUser: it changes
+    /// a security-relevant lifetime, so it belongs where a reviewer will see it. It cannot engage
+    /// in production because forge refuses to run there at all.
+    /// </summary>
+    private static string RenderCurrentUserRegistration(SolutionSpec spec)
+    {
+        const string scoped = """
+            builder.Services.AddScoped<CurrentUser>();
+            builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
+            builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
+            """;
+
+        if (!spec.WithRuntime) return scoped;
+
+        return """
+            if (ForgeRuntimeExtensions.IsForgeInvocation(args))
+            {
+                // forge invocation: one message, one process, so one identity for its lifetime.
+                // Wolverine scopes each message, and a scoped identity would not reach the handler.
+                builder.Services.AddSingleton<CurrentUser>();
+                builder.Services.AddSingleton<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
+                builder.Services.AddSingleton<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
+            }
+            else
+            {
+                builder.Services.AddScoped<CurrentUser>();
+                builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
+                builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
+            }
+            """;
+    }
 }

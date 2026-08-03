@@ -26,16 +26,18 @@ public static class RuntimeBridge
     private const string EndMarker = "<<<END-FORGE-RESULT>>>";
 
     /// <summary>Cheap pre-flight so a missing package is a clear message, not a confusing failure.</summary>
-    public static bool IsReferenced(ForgeConfig config, string solutionRoot)
+    public static bool IsReferenced(ForgeConfig config, string solutionRoot, string? packageId = null)
     {
         var project = Path.Combine(solutionRoot, config.ApiProject);
         if (!Directory.Exists(project)) return false;
+
+        var wanted = packageId ?? PackageId;
 
         return Directory
             .EnumerateFiles(project, "*.csproj", SearchOption.TopDirectoryOnly)
             .Any(file =>
             {
-                try { return File.ReadAllText(file).Contains(PackageId, StringComparison.OrdinalIgnoreCase); }
+                try { return File.ReadAllText(file).Contains(wanted, StringComparison.OrdinalIgnoreCase); }
                 catch { return false; }
             });
     }
@@ -110,7 +112,8 @@ public static class RuntimeBridge
                 ? $"The application ran but produced no forge result." + Environment.NewLine +
                   $"  -> Add this to {config.ApiProject}/Program.cs, before app.Run():" + Environment.NewLine +
                   $"       if (await app.RunForgeRuntimeAsync(args)) return;"
-                : $"The application exited with code {exitCode} before producing a forge result.";
+                : $"The application exited with code {exitCode} before producing a forge result." +
+                  Environment.NewLine + Indent(Tail(combined));
 
             return new RuntimeResult(false, null, reason, combined);
         }
@@ -132,6 +135,35 @@ public static class RuntimeBridge
     }
 
     internal static string ForgeRuntimeArgument(string verb) => "--forge:" + verb;
+
+    /// <summary>
+    /// Last few meaningful lines of the child's output.
+    ///
+    /// Without this a crash surfaces as a bare "exited with code -532462766", which tells the
+    /// user nothing and forces them to re-run the app by hand to find out what happened. The
+    /// tail is almost always the exception that actually killed it.
+    /// </summary>
+    private static string Tail(string output, int lines = 12)
+    {
+        var meaningful = output
+            .Replace("\r\n", "\n")
+            .Split('\n')
+            .Select(l => l.TrimEnd())
+            .Where(l => l.Length > 0
+                        // Build chatter and per-file copy noise drown out the real error.
+                        && !l.StartsWith("info:", StringComparison.Ordinal)
+                        && !l.Contains("Determining projects to restore", StringComparison.Ordinal)
+                        && !l.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return meaningful.Count == 0
+            ? "(the application produced no output)"
+            : string.Join(Environment.NewLine, meaningful.TakeLast(lines));
+    }
+
+    private static string Indent(string text) =>
+        string.Join(Environment.NewLine,
+            text.Split(Environment.NewLine).Select(l => "  | " + l));
 
     /// <summary>
     /// Pulls the payload out of stdout, which also carries the application's own logging —

@@ -12,8 +12,11 @@ public sealed class HandlersVerbHandler : IForgeVerbHandler
 {
     public string Verb => "handlers";
 
-    public Task<JsonNode?> HandleAsync(IServiceProvider services, string[] args, CancellationToken cancellationToken)
+    public async Task<JsonNode?> HandleAsync(IServiceProvider services, string[] args, CancellationToken cancellationToken)
     {
+        // Wolverine discovers handlers on start, and forge's hook runs before the host starts.
+        await using var _ = await WolverineAccess.StartWolverineAsync(services, cancellationToken);
+
         var graph = WolverineAccess.HandlerGraph(services);
 
         var messages = new JsonArray();
@@ -34,10 +37,10 @@ public sealed class HandlersVerbHandler : IForgeVerbHandler
             });
         }
 
-        return Task.FromResult<JsonNode?>(new JsonObject
+        return new JsonObject
         {
             ["messages"] = messages,
             ["count"] = messages.Count
-        });
+        };
     }
 }

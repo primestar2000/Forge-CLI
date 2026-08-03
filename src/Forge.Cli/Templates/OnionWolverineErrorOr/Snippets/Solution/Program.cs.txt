@@ -19,15 +19,18 @@ builder.Services.AddDbContext<{{DbContextName}}>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")
                       ?? "Data Source={{Solution}}.db"));
 
-builder.Services.AddScoped<CurrentUser>();
-builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());
-builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());
+{{CurrentUserRegistration}}
 
 // Repositories and IUnitOfWork. make:repo appends new registrations to AddInfrastructure.
 builder.Services.AddInfrastructure();
 
 builder.Host.UseWolverine(options =>
 {
+    // Handlers live in the ApplicationService project, but Wolverine only scans the application
+    // assembly by default — so without this, every handler make:feature generates is silently
+    // never discovered and the message has no handler at runtime.
+    options.Discovery.IncludeAssembly(typeof(IUnitOfWork).Assembly);
+
     // Secure by default: every message is denied unless it opts in. See RoleCheckMiddleware.
     options.Policies.AddMiddleware(typeof(RoleCheckMiddleware));
 });

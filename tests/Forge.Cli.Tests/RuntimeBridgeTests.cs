@@ -130,8 +130,14 @@ public class RuntimeBridgeTests
         }
     }
 
+    /// <summary>
+    /// Development is set explicitly because .NET treats an UNSET environment as Production, and
+    /// the runtime refuses to run there. forge's own RuntimeBridge does the same when launching
+    /// the child process, so this mirrors the real path rather than working around the guard.
+    /// </summary>
     private static IHost HostWith(params ISeeder[] seeders) =>
         new HostBuilder()
+            .UseEnvironment("Development")
             .ConfigureServices(services =>
             {
                 foreach (var seeder in seeders) services.AddSingleton(seeder);

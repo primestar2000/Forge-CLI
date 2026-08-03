@@ -29,13 +29,45 @@ public static class ForgeRuntimeExtensions
     /// Returns false — doing nothing at all — for a normal application start, which is the case
     /// that matters: this must be invisible in production.
     /// </summary>
+    /// <summary>
+    /// True when this process was launched by forge. Exposed so the application can switch
+    /// registrations for the invocation — see the generated Program.cs, which registers the
+    /// current-user services as singletons in forge mode because the process handles exactly one
+    /// message. Cheap and side-effect free; safe to call before the container is built.
+    /// </summary>
+    public static bool IsForgeInvocation(string[] args) => FindVerb(args) is not null;
+
+    /// <param name="enabled">
+    /// Explicit kill switch. Pass <c>builder.Environment.IsDevelopment()</c> to make the
+    /// intent visible at the call site. When false this returns immediately, whatever the
+    /// arguments say.
+    /// </param>
     public static async Task<bool> RunForgeRuntimeAsync(
         this IHost host,
         string[] args,
+        bool? enabled = null,
         CancellationToken cancellationToken = default)
     {
         var verb = FindVerb(args);
         if (verb is null) return false;
+
+        if (enabled == false) return false;
+
+        // Defence in depth: without this, anything able to pass --forge:seed to a production
+        // process gets the seeders executed. A misconfigured container CMD is a likelier route
+        // than an attacker, and either way the blast radius is the production database.
+        if (IsProduction(host) && !ForgeRuntimeArgs.Flag(args, "allow-production"))
+        {
+            Console.Out.Write(ForgeEnvelope.Failure(verb,
+                "Refusing to run: the hosting environment is Production." + Environment.NewLine +
+                "  -> forge is a development tool and will not touch a production process." + Environment.NewLine +
+                "  -> Note .NET treats an UNSET environment as Production, so if this is a dev " +
+                "machine, set ASPNETCORE_ENVIRONMENT=Development." + Environment.NewLine +
+                "  -> If this is genuinely intended, re-run with --i-know-this-is-production."));
+
+            await Console.Out.FlushAsync();
+            return true;
+        }
 
         try
         {
@@ -91,6 +123,22 @@ public static class ForgeRuntimeExtensions
         throw new ForgeRuntimeException(
             $"Pitechy.Forge.Runtime {typeof(ForgeRuntimeExtensions).Assembly.GetName().Version?.ToString(3)} " +
             $"has no handler for the verb '{verb}'." + Environment.NewLine + hint);
+    }
+
+    /// <summary>
+    /// Reads the environment from IHostEnvironment when available, falling back to the ambient
+    /// variables. The fallback matters: a plain Host (no web builder) may not register
+    /// IHostEnvironment the same way, and a guard that silently fails open is not a guard.
+    /// </summary>
+    private static bool IsProduction(IHost host)
+    {
+        var fromHost = host.Services.GetService<IHostEnvironment>()?.EnvironmentName;
+
+        var environment = fromHost
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+        return string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase);
     }
 
     internal static string? FindVerb(string[] args)

@@ -8,6 +8,7 @@ namespace Forge.Cli.Tests;
 /// --startup-project wrong is the usual reason dotnet-ef fails in a layered solution. It is pure,
 /// so it is tested directly rather than by launching processes.
 /// </summary>
+[Collection(Infrastructure.EnvironmentCollection.Name)]
 public class EfToolTests
 {
     private static ForgeConfig Config() => new()

@@ -30,6 +30,10 @@ public sealed class InvokeVerbHandler : IForgeVerbHandler
         string[] args,
         CancellationToken cancellationToken)
     {
+        // Wolverine discovers handlers and builds its pipeline on start, and forge's hook runs
+        // before the host starts. Without this the message looks unhandled.
+        await using var _ = await WolverineAccess.StartWolverineAsync(services, cancellationToken);
+
         var graph = WolverineAccess.HandlerGraph(services);
 
         var requested = ForgeRuntimeArgs.Option(args, "message")
@@ -38,19 +42,26 @@ public sealed class InvokeVerbHandler : IForgeVerbHandler
         var messageType = ResolveMessageType(graph, requested);
         var message = BuildMessage(services, messageType, args);
 
+        // Sign in BEFORE invoking: the pipeline is secure by default, so a guarded message
+        // invoked with nobody signed in is denied as Guest.
+        var identity = ForgeRuntimeArgs.Option(args, "identity");
+        if (!string.IsNullOrWhiteSpace(identity)) Impersonation.Apply(services, identity!);
+
         var bus = services.GetRequiredService<IMessageBus>();
 
         var started = DateTime.UtcNow;
         var result = await bus.InvokeAsync<object>(message, cancellationToken);
         var elapsed = (int)(DateTime.UtcNow - started).TotalMilliseconds;
 
+        var isError = TryReadIsError(result);
+
         return new JsonObject
         {
             ["messageType"] = messageType.Name,
             ["payload"] = Serialise(message),
-            ["result"] = Serialise(result),
+            ["result"] = Tidy(Serialise(result), isError),
             ["resultType"] = result?.GetType().Name,
-            ["isError"] = TryReadIsError(result),
+            ["isError"] = isError,
             ["milliseconds"] = elapsed
         };
     }
@@ -195,6 +206,27 @@ public sealed class InvokeVerbHandler : IForgeVerbHandler
                 ["value"] = value.ToString()
             };
         }
+    }
+
+    /// <summary>
+    /// Drops the errors collection from a SUCCESSFUL result.
+    ///
+    /// Discriminated-union types keep both sides on the object, and serialising a success still
+    /// emits the error side — ErrorOr renders it as a placeholder reading "Error list cannot be
+    /// retrieved from a successful ErrorOr". Printing that under a green "succeeded" line is
+    /// actively misleading, so it is removed.
+    ///
+    /// Keyed off the generic isError/errors shape rather than the ErrorOr type, so this package
+    /// stays free of a template-specific dependency.
+    /// </summary>
+    private static JsonNode? Tidy(JsonNode? result, bool? isError)
+    {
+        if (isError != false || result is not JsonObject obj) return result;
+
+        obj.Remove("errors");
+        obj.Remove("errorsOrEmptyList");
+        obj.Remove("firstError");
+        return obj;
     }
 
     /// <summary>
