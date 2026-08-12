@@ -109,6 +109,21 @@ internal static class SolutionScaffold
         }
 
         // ---- Domain ---------------------------------------------------------------------
+        if (spec.WithBaseEntity)
+        {
+            // Setters match the entity style: a protected setter on the base is unsettable from
+            // an anemic entity's object initializer, and a public one on an encapsulated base
+            // would be the one hole in an otherwise closed model.
+            plan = Add(plan, Path.Combine(domainDir, "Entities", $"{SolutionSpec.BaseEntityName}.cs"),
+                ctx.Render("Solution/BaseEntity.cs.txt", new Dictionary<string, string>
+                {
+                    ["Usings"] = string.Empty,
+                    ["Namespace"] = Namespaces.For(domainNs, "Entities"),
+                    ["BaseEntity"] = SolutionSpec.BaseEntityName,
+                    ["Setter"] = "protected set;"
+                }));
+        }
+
         plan = Add(plan, Path.Combine(domainDir, "Enums", $"{spec.RoleEnum}.cs"),
             ctx.Render("Solution/UserRole.cs.txt", new Dictionary<string, string>
             {
@@ -269,7 +284,11 @@ internal static class SolutionScaffold
             DbContextName = spec.ResolvedDbContextName,
             RoleEnum = spec.RoleEnum,
             RoleGuardStyle = spec.RoleGuardStyle,
-            Scheduler = spec.Scheduler
+            Scheduler = spec.Scheduler,
+
+            // Only set when the class was actually generated. Pointing this at a type that does
+            // not exist makes the very next make:entity fail with a config error.
+            EntityBaseClass = spec.WithBaseEntity ? SolutionSpec.BaseEntityName : ""
         };
 
         plan = Add(plan, ConfigLoader.FileName,

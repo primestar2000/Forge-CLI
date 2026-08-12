@@ -1,13 +1,12 @@
-// forge:tokens Usings, Namespace, Entity, Properties, Constructor, Update
+// forge:tokens Usings, Namespace, Entity, BaseClass, Properties, Constructor, Update
 {{Usings}}namespace {{Namespace}};
 
-public class {{Entity}}
+public class {{Entity}}{{BaseClass}}
 {
-    public Guid Id { get; private set; }
 {{Properties}}
 
     /// <summary>
-    /// Required by EF Core to materialise a {{Entity}} from the database. Not for application
+    /// Required by EF Core to materialise {{Entity}} from the database. Not for application
     /// code — construct through the public constructor so the entity is always complete.
     /// </summary>
     private {{Entity}}()

@@ -25,27 +25,60 @@ internal static class EntityScaffold
         var plan = GenerationPlan.Empty;
 
         // ---- 1. Domain entity -----------------------------------------------------------
+        // ---- base class ------------------------------------------------------------------
+        var baseName = config.EntityBaseClass?.Trim() ?? string.Empty;
+        IReadOnlyList<string> inherited = [];
+
+        if (baseName.Length > 0)
+        {
+            var baseType = ctx.DomainIndex.FindType(baseName, Microsoft.CodeAnalysis.CSharp.SyntaxKind.ClassDeclaration);
+
+            if (baseType is null)
+            {
+                // Guessing either way produces a broken entity: assume it has Id and an entity
+                // with no key reaches EF; assume it does not and every entity warns CS0108.
+                return PlanResult.ConfigInvalid(
+                    $"forge.config.json sets entityBaseClass to '{baseName}', but no such class exists in " +
+                    $"'{config.DomainProject}'." + Environment.NewLine +
+                    $"  -> Create it, or run 'forge make:solution --with-base-entity' in a new solution," +
+                    Environment.NewLine +
+                    $"     or clear entityBaseClass to generate standalone entities.");
+            }
+
+            inherited = [.. baseType.Properties.Select(p => p.Name)];
+        }
+
+        // Anything the base already declares is skipped, so a base carrying Id and audit
+        // timestamps does not produce CS0108 on every generated entity.
+        var declared = spec.Properties
+            .Where(p => !inherited.Contains(p.Name, StringComparer.Ordinal))
+            .ToList();
+
+        var declaresId = !inherited.Contains("Id", StringComparer.Ordinal);
+
         var entityPath = ctx.PathIn(config.DomainProject, config.DomainEntitiesPath, $"{name}.cs");
         var entityStub = spec.Encapsulated ? "EntityEncapsulated.cs.txt" : "Entity.cs.txt";
 
-        plan = plan.Concat(ctx.CreateOrSkip(entityPath, () => ctx.Render(entityStub,
-            spec.Encapsulated
-                ? new Dictionary<string, string>
-                {
-                    ["Usings"] = ctx.Usings("System"),
-                    ["Namespace"] = entitiesNamespace,
-                    ["Entity"] = name,
-                    ["Properties"] = RenderProperties(spec.Properties, ctx.CodeStyle.IndentUnit, encapsulated: true),
-                    ["Constructor"] = RenderConstructor(name, spec.Properties, ctx.CodeStyle.IndentUnit),
-                    ["Update"] = RenderUpdate(spec.Properties, ctx.CodeStyle.IndentUnit)
-                }
-                : new Dictionary<string, string>
-                {
-                    ["Usings"] = ctx.Usings("System"),
-                    ["Namespace"] = entitiesNamespace,
-                    ["Entity"] = name,
-                    ["Properties"] = RenderProperties(spec.Properties, ctx.CodeStyle.IndentUnit)
-                })));
+        plan = plan.Concat(ctx.CreateOrSkip(entityPath, () =>
+        {
+            var tokens = new Dictionary<string, string>
+            {
+                ["Usings"] = ctx.Usings("System"),
+                ["Namespace"] = entitiesNamespace,
+                ["Entity"] = name,
+                ["BaseClass"] = baseName.Length > 0 ? $" : {baseName}" : string.Empty,
+                ["Properties"] = RenderProperties(
+                    declared, ctx.CodeStyle.IndentUnit, spec.Encapsulated, declaresId)
+            };
+
+            if (spec.Encapsulated)
+            {
+                tokens["Constructor"] = RenderConstructor(name, declared, ctx.CodeStyle.IndentUnit);
+                tokens["Update"] = RenderUpdate(declared, ctx.CodeStyle.IndentUnit);
+            }
+
+            return ctx.Render(entityStub, tokens);
+        }));
 
         // ---- 2. EF Core configuration ---------------------------------------------------
         var configPath = ctx.PathIn(config.InfrastructureProject, config.InfrastructureConfigurationsPath, $"{name}Configuration.cs");
@@ -95,18 +128,38 @@ internal static class EntityScaffold
         };
     }
 
+    /// <summary>
+    /// The whole member block, Id included — one token rather than a hardcoded Id line in the
+    /// stub plus a properties token, because with a base class the Id line disappears and the
+    /// stub would be left with a stray blank line where it used to be.
+    /// </summary>
     private static string RenderProperties(
-        IReadOnlyList<PropertySpec> properties, string indent, bool encapsulated = false)
+        IReadOnlyList<PropertySpec> properties, string indent, bool encapsulated, bool declaresId)
     {
+        var lines = new List<string>();
+
+        if (declaresId)
+        {
+            lines.Add($"{indent}public Guid Id {{ get; {(encapsulated ? "private set;" : "set;")} }}");
+        }
+
         if (properties.Count == 0)
-            return $"{indent}// TODO: add properties, or re-run with --properties \"Name:string,...\"";
+        {
+            lines.Add($"{indent}// TODO: add properties, or re-run with --properties \"Name:string,...\"");
+            return string.Join("\n\n", lines);
+        }
 
         var sb = new StringBuilder();
         foreach (var property in properties)
         {
-            sb.Append('\n').Append(indent).Append(property.Render(encapsulated));
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append(indent).Append(property.Render(encapsulated));
         }
-        return sb.ToString();
+
+        lines.Add(sb.ToString());
+
+        // Blank line between Id and the entity's own properties; none between the properties.
+        return string.Join("\n\n", lines);
     }
 
     /// <summary>

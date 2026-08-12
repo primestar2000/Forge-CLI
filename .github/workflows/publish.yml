@@ -1,0 +1,117 @@
+# Publishes all three packages to NuGet.org on a version tag.
+#
+# Trusted Publishing (OIDC) rather than a stored API key: GitHub mints a short-lived token,
+# NuGet/login exchanges it for an API key valid for one hour and one publisher. There is no
+# long-lived secret in this repository to leak or rotate.
+#
+# One-time setup on nuget.org, per package (Pitechy.Forge.Cli, Pitechy.Forge.Runtime,
+# Pitechy.Forge.Runtime.Wolverine):
+#   Account -> Trusted Publishing -> Add
+#     Repository owner : primestar2000
+#     Repository       : Forge-CLI
+#     Workflow file    : publish.yml
+#     Environment      : release
+# Then create a GitHub environment named "release" (Settings -> Environments). Requiring a
+# reviewer on it makes publishing a deliberate, approved act rather than a side effect of a tag.
+
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish, without the leading v (e.g. 0.1.0-preview.2)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    # Gates the OIDC token: without a matching environment on the nuget.org policy, the
+    # exchange is refused.
+    environment: release
+
+    permissions:
+      contents: read
+      id-token: write        # required to mint the OIDC token
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The three packages MUST publish at the same version. runtime:install and
+      # make:solution --with-runtime write the CLI's OWN version into the PackageReference
+      # they generate, so a CLI published ahead of the runtime packages emits a reference to
+      # a version that does not exist and the user's solution fails to restore.
+      #
+      # Directory.Build.props is the single source, so the only way to get this wrong is a tag
+      # that disagrees with it. Checked here rather than discovered after a permanent publish.
+      - name: Verify the tag matches Directory.Build.props
+        run: |
+          prefix=$(grep -oPm1 '(?<=<VersionPrefix>)[^<]+' Directory.Build.props)
+          suffix=$(grep -oPm1 '(?<=<VersionSuffix>)[^<]+' Directory.Build.props)
+          version="$prefix${suffix:+-$suffix}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            expected="${{ github.event.inputs.version }}"
+          else
+            expected="${GITHUB_REF_NAME#v}"
+          fi
+
+          echo "Directory.Build.props : $version"
+          echo "Requested             : $expected"
+
+          if [ "$version" != "$expected" ]; then
+            echo "::error::Version mismatch. Bump Directory.Build.props or retag - a NuGet version cannot be replaced once published."
+            exit 1
+          fi
+
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      # The fast suite alone cannot see the failures that matter here. Nearly every real defect
+      # in this codebase - a NuGet version conflict, a missing using on a patched file, a
+      # namespace collision - was invisible to plan-level assertions and caught only by
+      # compiling generated output. Publishing is permanent, so both run before the push.
+      - name: Test (fast)
+        run: dotnet test -c Release --no-build --filter "Category!=Compile"
+
+      - name: Test (compile gate)
+        run: dotnet test -c Release --no-build --filter "Category=Compile"
+
+      - name: Pack
+        run: |
+          for project in Forge.Cli Forge.Runtime Forge.Runtime.Wolverine; do
+            dotnet pack "src/$project" -c Release --no-build -o ./nupkg
+          done
+          ls -l ./nupkg
+
+      - name: Authenticate to NuGet
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # No --skip-duplicate: a 409 means this version is already public and the run should fail
+      # loudly. Silently succeeding would leave the tag looking published while the packages on
+      # nuget.org are whatever was there before.
+      #
+      # Symbols are not pushed separately - nuget.org picks up a co-located .snupkg.
+      - name: Push
+        run: |
+          dotnet nuget push "nupkg/*.${VERSION}.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"

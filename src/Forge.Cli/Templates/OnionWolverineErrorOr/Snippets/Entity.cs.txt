@@ -1,8 +1,7 @@
-// forge:tokens Usings, Namespace, Entity, Properties
+// forge:tokens Usings, Namespace, Entity, BaseClass, Properties
 {{Usings}}namespace {{Namespace}};
 
-public class {{Entity}}
+public class {{Entity}}{{BaseClass}}
 {
-    public Guid Id { get; set; }
 {{Properties}}
 }

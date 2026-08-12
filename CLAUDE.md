@@ -141,6 +141,12 @@ else it improves.
 
     An entity with no properties emits *only* the private constructor — a generated public one
     would be parameterless and collide with it.
+11. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
+    domain project and omits every property it declares, so a base carrying `Id` and audit
+    timestamps does not produce CS0108 on every entity. If the class is not found, `make:entity`
+    stops with exit 3 rather than guessing — assume it has `Id` and the entity reaches EF with no
+    key; assume it does not and every entity warns. The lookup is syntactic, so the base must
+    live in the domain project.
 
 ---
 

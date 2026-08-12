@@ -41,6 +41,36 @@ public class EntityShapeTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>Drops a base class into the domain project for forge to find and read.</summary>
+    private void WriteBaseClass(string name, params string[] properties)
+    {
+        var body = string.Join("\n", properties.Select(p => $"    public {p} {{ get; protected set; }}"));
+
+        File.WriteAllText(
+            Path.Combine(_root, "src", "App.Domain", $"{name}.cs"),
+            $"namespace App.Domain.Entities;\n\npublic abstract class {name}\n{{\n{body}\n}}");
+    }
+
+    private void SetBaseClass(string name) =>
+        File.WriteAllText(Path.Combine(_root, "forge.config.json"),
+            File.ReadAllText(Path.Combine(_root, "forge.config.json"))
+                .Replace("\"template\":", $"\"entityBaseClass\": \"{name}\",\n  \"template\":"));
+
+    private PlanResult PlanEntity(string properties, bool encapsulated = true)
+    {
+        var loaded = ConfigLoader.Load(_root);
+        Assert.True(loaded.Ok, loaded.Error);
+
+        var ctx = new TemplateContext(
+            loaded.Config!, loaded.SolutionRoot!, CodeStyle.Default,
+            new StubRepository(loaded.SolutionRoot!, loaded.Config!.StubOverridesPath, "OnionWolverineErrorOr"),
+            force: false);
+
+        return EntityScaffold.Plan(ctx, new EntitySpec("Order",
+            PropertyParser.Parse(properties).Properties,
+            SkipDbSet: true, Encapsulated: encapsulated));
+    }
+
     private string Entity(string properties, bool encapsulated = true)
     {
         var loaded = ConfigLoader.Load(_root);
@@ -139,6 +169,85 @@ public class EntityShapeTests : IDisposable
         Assert.Contains("public string Reference { get; private set; } = string.Empty;", entity);
         Assert.Contains("public string? Notes { get; private set; }", entity);
         Assert.DoesNotContain("Notes { get; private set; } = string.Empty;", entity);
+    }
+
+    // ---- base classes ----------------------------------------------------------------------
+
+    [Fact]
+    public void A_configured_base_class_is_inherited_and_its_Id_is_not_redeclared()
+    {
+        WriteBaseClass("BaseEntity", "Guid Id", "DateTime CreatedAt", "DateTime? UpdatedAt");
+        SetBaseClass("BaseEntity");
+
+        var entity = Entity("Reference:string,Total:decimal");
+
+        Assert.Contains("public class Order : BaseEntity", entity);
+
+        // Redeclaring an inherited member is CS0108 on every generated entity.
+        Assert.DoesNotContain("Guid Id", entity);
+        Assert.DoesNotContain("CreatedAt", entity);
+        Assert.DoesNotContain("UpdatedAt", entity);
+
+        Assert.Contains("public string Reference { get; private set; }", entity);
+    }
+
+    /// <summary>
+    /// Someone naming a property that the base already provides should get the base's — not a
+    /// duplicate declaration that shadows it.
+    /// </summary>
+    [Fact]
+    public void A_property_the_base_already_declares_is_dropped()
+    {
+        WriteBaseClass("AuditableEntity", "Guid Id", "DateTime CreatedAt");
+        SetBaseClass("AuditableEntity");
+
+        var entity = Entity("CreatedAt:DateTime,Reference:string");
+
+        Assert.Contains("public class Order : AuditableEntity", entity);
+        Assert.DoesNotContain("CreatedAt", entity);
+
+        // And it must not leak into the generated constructor either.
+        Assert.Contains("public Order(string reference)", entity);
+    }
+
+    /// <summary>
+    /// Guessing is broken either way: assume the base has Id and the entity reaches EF with no
+    /// key; assume it does not and every entity warns CS0108. Stop with the fix instead.
+    /// </summary>
+    [Fact]
+    public void A_base_class_that_does_not_exist_is_a_config_error_naming_the_fix()
+    {
+        SetBaseClass("MissingBase");
+
+        var result = PlanEntity("Reference:string");
+
+        Assert.False(result.Ok);
+        Assert.Equal(Forge.Cli.Cli.ExitCodes.ConfigInvalid, result.ExitCode);
+        Assert.Contains("MissingBase", result.Error);
+        Assert.Contains("src/App.Domain", result.Error);
+        Assert.Contains("--with-base-entity", result.Error);
+    }
+
+    [Fact]
+    public void No_base_class_configured_keeps_the_standalone_shape()
+    {
+        var entity = Entity("Reference:string");
+
+        Assert.Contains("public class Order\n", entity.Replace("\r\n", "\n"));
+        Assert.Contains("public Guid Id { get; private set; }", entity);
+    }
+
+    [Fact]
+    public void Base_classes_work_with_the_anemic_shape_too()
+    {
+        WriteBaseClass("BaseEntity", "Guid Id");
+        SetBaseClass("BaseEntity");
+
+        var entity = Entity("Reference:string", encapsulated: false);
+
+        Assert.Contains("public class Order : BaseEntity", entity);
+        Assert.DoesNotContain("Guid Id", entity);
+        Assert.Contains("public string Reference { get; set; }", entity);
     }
 
     [Fact]

@@ -60,6 +60,19 @@ public sealed class ForgeConfig
     /// </summary>
     public bool EncapsulateEntities { get; set; } = true;
 
+    /// <summary>
+    /// Base class every generated entity derives from, e.g. "BaseEntity". Empty means none.
+    ///
+    /// forge reads the base type's own properties out of the domain project and omits them from
+    /// the generated entity, so a base carrying Id and audit timestamps does not produce
+    /// CS0108 "hides inherited member" on every entity. That lookup is syntactic — the base has
+    /// to live in the domain project for forge to see it.
+    ///
+    /// Set by <c>make:solution --with-base-entity</c>, or by hand for a solution that already
+    /// has one.
+    /// </summary>
+    public string EntityBaseClass { get; set; } = "";
+
     public string RoleEnum { get; set; } = "UserRole";
 
     /// <summary>"single-array" or "role-and-subrole" — the two shapes seen in the wild.</summary>

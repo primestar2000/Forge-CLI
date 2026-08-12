@@ -46,7 +46,8 @@ public sealed class ScaffoldHarness : IDisposable
 
     public string SolutionDirectory { get; private set; } = string.Empty;
 
-    public async Task<ExecutionResult> MakeSolution(string name, string roleGuardStyle)
+    public async Task<ExecutionResult> MakeSolution(
+        string name, string roleGuardStyle, bool withBaseEntity = false)
     {
         SolutionDirectory = Path.Combine(Root, name);
 
@@ -57,7 +58,8 @@ public sealed class ScaffoldHarness : IDisposable
         // generated app, and a TFM whose runtime is not installed fails with "You must install
         // or update .NET" rather than telling us anything about the generated code.
         var spec = new SolutionSpec(name, SolutionDirectory, roleGuardStyle, "wolverine",
-            SolutionSpec.DefaultTargetFramework, "UserRole", null);
+            SolutionSpec.DefaultTargetFramework, "UserRole", null,
+            WithBaseEntity: withBaseEntity);
 
         return Apply(await _template.PlanSolution(context, spec, CancellationToken.None));
     }

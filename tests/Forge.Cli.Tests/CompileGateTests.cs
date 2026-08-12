@@ -86,6 +86,29 @@ public class CompileGateTests
     }
 
     /// <summary>
+    /// A base class carrying Id changes where EF finds the key and where every repository's
+    /// generic constraint resolves. Redeclaring an inherited member is a CS0108 warning, which
+    /// this gate fails on — and none of it is visible to a plan assertion.
+    /// </summary>
+    [Fact]
+    public async Task A_solution_with_a_base_entity_compiles_clean()
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array", withBaseEntity: true);
+
+        await harness.MakeEntity("Order", "Reference:string,Total:decimal");
+
+        // CreatedAt is already on BaseEntity: asking for it again must not redeclare it.
+        await harness.MakeEntity("Product", "Name:string,CreatedAt:DateTime");
+
+        await harness.MakeRepository("Order");
+        await harness.MakeResource("Order");
+
+        AssertClean(harness.Build());
+    }
+
+    /// <summary>
     /// Re-running every generator must be a no-op that still compiles. A patcher that inserted a
     /// duplicate member would break the build here even though each individual patch reported
     /// success.

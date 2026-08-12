@@ -12,8 +12,12 @@ public sealed record SolutionSpec(
     string RoleEnum,
     string? DbContextName,
     bool PinForge = false,
-    bool WithRuntime = false)
+    bool WithRuntime = false,
+    bool WithBaseEntity = false)
 {
+    /// <summary>Name of the generated base class. Only meaningful when WithBaseEntity is set.</summary>
+    public const string BaseEntityName = "BaseEntity";
+
     public string ResolvedDbContextName =>
         string.IsNullOrWhiteSpace(DbContextName) ? $"{Name}DbContext" : DbContextName!;
 

@@ -42,6 +42,13 @@ public static class MakeSolutionCommand
                           "enabling db:seed and invoke:* (Tier 2)."
         };
 
+    private static readonly Option<bool> WithBaseEntityOption =
+        new("--with-base-entity")
+        {
+            Description = "Generate a BaseEntity carrying Id and audit timestamps, and derive " +
+                          "every generated entity from it."
+        };
+
     private static readonly Option<bool> PinForgeOption =
         new("--pin-forge")
         {
@@ -54,7 +61,7 @@ public static class MakeSolutionCommand
         var command = new Command("make:solution",
             "Scaffold a full onion-architecture solution, wired and ready to build.");
 
-        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption, WithRuntimeOption })
+        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption, WithRuntimeOption, WithBaseEntityOption })
             command.Options.Add(option);
 
         command.WithGlobals();
@@ -90,7 +97,8 @@ public static class MakeSolutionCommand
             RoleEnum: "UserRole",
             DbContextName: null,
             PinForge: parse.GetValue(PinForgeOption),
-            WithRuntime: parse.GetValue(WithRuntimeOption));
+            WithRuntime: parse.GetValue(WithRuntimeOption),
+            WithBaseEntity: parse.GetValue(WithBaseEntityOption));
 
         // Stubs resolve against the solution being created, so a team can pre-seed .forge/stubs.
         var stubs = new StubRepository(root, ".forge/stubs", template.SnippetFolder);

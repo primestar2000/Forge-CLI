@@ -39,6 +39,31 @@ into intention-revealing methods (`Rename`, `Reprice`, `Cancel`) as the domain e
 the anemic shape? `--public-setters` for one entity, `"encapsulateEntities": false` for the
 solution.
 
+### Base classes
+
+Point `entityBaseClass` at a class in your domain project and every generated entity derives from
+it:
+
+```jsonc
+// forge.config.json
+"entityBaseClass": "BaseEntity"
+```
+
+```csharp
+public class Order : BaseEntity
+{
+    public string Reference { get; private set; } = string.Empty;
+    ...
+```
+
+forge reads the base's *own* properties and omits them from what it generates, so a base carrying
+`Id` and audit timestamps never produces CS0108 "hides inherited member". Adding a field to the
+base is enough — no generator change, and existing entities keep compiling. Works with any base
+you already have (`BaseEntity`, `AuditableEntity`, whatever it's called), not just one forge wrote.
+
+Starting fresh? `make:solution --with-base-entity` generates one with `Id`, `CreatedAt`,
+`UpdatedAt` and a `Touch()` helper, and sets the config key for you.
+
 ## Install
 
 The only prerequisite is the .NET SDK.

@@ -1,0 +1,26 @@
+// forge:tokens Usings, Namespace, BaseEntity, Setter
+{{Usings}}namespace {{Namespace}};
+
+/// <summary>
+/// Identity and audit fields shared by every entity.
+///
+/// forge omits any property declared here from the entities it generates, so adding a field to
+/// this class is enough — no generator change and no CS0108 on existing entities.
+/// </summary>
+public abstract class {{BaseEntity}}
+{
+    public Guid Id { get; {{Setter}} }
+
+    public DateTime CreatedAt { get; {{Setter}} } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; {{Setter}} }
+
+    /// <summary>
+    /// Call from a mutating method so UpdatedAt reflects the change.
+    ///
+    /// Deliberately manual rather than a SaveChanges interceptor: an interceptor stamps every
+    /// tracked entity whether or not anything meaningful changed, and it is invisible at the
+    /// call site. Wire one up in the DbContext if you would rather have it automatic.
+    /// </summary>
+    protected void Touch() => UpdatedAt = DateTime.UtcNow;
+}
