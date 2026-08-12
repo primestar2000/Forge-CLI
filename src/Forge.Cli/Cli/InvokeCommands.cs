@@ -137,9 +137,8 @@ public static class InvokeCommands
             else
             {
                 output.Failure($"x {error}");
-                output.Dim($"  -> dotnet add {config.ApiProject} package {WolverinePackageId}");
-                output.Dim("  -> then in Program.cs:  builder.Services.AddForgeWolverine();");
-                output.Dim("  -> and before app.Run(): if (await app.RunForgeRuntimeAsync(args)) return;");
+                output.Dim("  -> forge runtime:install");
+                output.Dim("     (adds the packages and wires Program.cs; --dry-run to preview)");
             }
             return ExitCodes.ConfigInvalid;
         }

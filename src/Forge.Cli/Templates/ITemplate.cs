@@ -38,6 +38,16 @@ public interface ITemplate
     Task<PlanResult> PlanSolution(SolutionScaffoldContext ctx, SolutionSpec spec, CancellationToken ct);
 
     /// <summary>
+    /// Wires the tier-2 runtime into a solution that already exists — packages, usings, the
+    /// hook and any registrations the architecture needs.
+    ///
+    /// Separate from PlanSolution because the need is discovered after scaffolding: a
+    /// creation-time flag cannot help a solution that already exists, which is where every
+    /// report of "invoke:* is unavailable" has come from.
+    /// </summary>
+    Task<PlanResult> PlanRuntimeInstall(TemplateContext ctx, string? version, CancellationToken ct);
+
+    /// <summary>
     /// Architecture-specific health checks (role-guard shape, scheduler package, DbContext).
     /// These live here rather than in Diagnostics/Checks so the core diagnostics stay free of
     /// onion/Wolverine/ErrorOr knowledge — invariant 8.

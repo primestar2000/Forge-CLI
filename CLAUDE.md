@@ -229,13 +229,25 @@ not something to quietly add.
 
 | Tier | Requires | Commands |
 |---|---|---|
-| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init` — ~80% of the tool |
+| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init`, `runtime:install` — ~80% of the tool |
 | 1 | `dotnet-ef` global tool | `db:migrate`, `db:migration`, `db:rollback`, `db:status` |
-| 2 | `Forge.Runtime` PackageReference | `invoke:*`, `db:seed`, runtime-mode `route:list` |
+| 2 | `Forge.Runtime` PackageReference | `db:seed`, runtime-mode `route:list` |
+| 2 | **+** `Forge.Runtime.Wolverine` | `invoke:list`, `invoke:run` |
 
 Tier 0 is pure text-in/text-out and can never conflict with anything, so forge can be adopted on a
 legacy solution with no csproj changes at all. `doctor` reports which tier is currently available
 and **never hard-fails on a missing optional dependency** — it prints the command to fix it.
+
+**Tier 2 is two packages, not one, and `doctor` must report them per capability.** A solution with
+only the core package has a working `db:seed` and an unavailable `invoke:*`; reporting that as
+"Tier 2 — all commands available" is how doctor came to contradict `invoke:list` seconds later.
+
+**`forge runtime:install` is the only supported way to reach tier 2.** It adds both packages and
+patches `Program.cs` — the usings, `AddForgeWolverine()`, the `RunForgeRuntimeAsync` hook, and the
+singleton identity override that a scoped `ICurrentUser` would otherwise defeat under Wolverine's
+per-message scope. `make:solution --with-runtime` covers only creation time, and the need is
+almost always discovered later. Never tell a user to run `dotnet add package` for these — the
+package alone leaves the app silently producing no forge result.
 
 ### Why tier 2 needs a process boundary
 
@@ -294,7 +306,7 @@ dotnet forge config:validate && dotnet forge doctor
 
 # 5. Optional — only for tier 1/2
 dotnet tool install --global dotnet-ef
-dotnet add src/App.API package Pitechy.Forge.Runtime
+dotnet forge runtime:install          # packages + Program.cs wiring, in one step
 
 # 6. Use it
 dotnet forge make:entity -n Gig --properties "Name:string,BudgetMin:int"

@@ -57,13 +57,25 @@ Most of forge needs none of them:
 
 | Tier | Requires | Commands |
 |---|---|---|
-| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init` — ~80% of the tool |
+| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init`, `runtime:install` — ~80% of the tool |
 | 1 | `dotnet-ef` | `db:migrate`, `db:migration`, `db:rollback`, `db:status` |
-| 2 | `Forge.Runtime` | `db:seed`, `invoke:*` |
+| 2 | `Forge.Runtime` | `db:seed`, runtime-mode `route:list` |
+| 2 | **+** `Forge.Runtime.Wolverine` | `invoke:list`, `invoke:run` |
 
 Tier 0 is pure text-in, text-out and can never conflict with anything, so forge can be adopted on a
 legacy solution with no csproj changes at all. `forge doctor` reports which tier is available and
 prints the command to reach the next one.
+
+Reaching tier 2 is one command, on a new solution or an existing one:
+
+```bash
+dotnet forge runtime:install --dry-run   # preview the exact diff
+dotnet forge runtime:install
+```
+
+It adds the packages and wires `Program.cs` — the hook, the verb-handler registration, and the
+identity lifetime `invoke:run --as-role` depends on. Adding the package by hand is not enough:
+without the hook the app starts, ignores the forge argument, and reports nothing.
 
 ## Why tier 2 runs out of process
 

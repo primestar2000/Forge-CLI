@@ -44,12 +44,22 @@ public sealed class ConfigCheck : IDoctorCheck
 }
 
 /// <summary>
-/// Tier 2 availability. Forge.Runtime is opt-in: its absence is never a failure, it just means
-/// invoke:*, db:seed and runtime-mode route:list are unavailable.
+/// Tier 2 availability, reported per capability rather than as one flag.
+///
+/// Three defects made this lie. It checked only the core package while invoke:* additionally
+/// needs the Wolverine satellite, so doctor announced "Tier 2 - all commands available" and the
+/// very next invoke:list refused. It matched the package id as a substring, so the satellite
+/// alone satisfied the check for the core. And it never looked at Program.cs, so a project with
+/// the package but no RunForgeRuntimeAsync hook — the state you land in after adding the package
+/// by hand — was reported as working. All three observed on real projects.
+///
+/// A diagnostic that overstates what works is worse than none: it sends people looking in the
+/// wrong place.
 /// </summary>
 public sealed class RuntimePackageCheck : IDoctorCheck
 {
     public const string PackageId = "Pitechy.Forge.Runtime";
+    public const string WolverinePackageId = "Pitechy.Forge.Runtime.Wolverine";
 
     public IEnumerable<CheckResult> Run(DoctorContext context)
     {
@@ -59,14 +69,78 @@ public sealed class RuntimePackageCheck : IDoctorCheck
             yield break;
         }
 
-        var referenced = context.AllProjectFiles.Contains(PackageId, StringComparison.OrdinalIgnoreCase);
-        var apiProject = context.Config!.ApiProject;
+        var projects = context.AllProjectFiles;
 
-        yield return referenced
-            ? CheckResult.Pass("Forge.Runtime", "referenced - Tier 2 commands available")
-            : CheckResult.Warn("Forge.Runtime",
-                "not referenced - invoke:*, db:seed and full route:list unavailable (Tier 2)",
-                $"dotnet add {apiProject} package {PackageId}");
+        var core = ReferencesPackage(projects, PackageId);
+        var wolverine = ReferencesPackage(projects, WolverinePackageId);
+        var program = ReadProgram(context);
+
+        var hooked = program.Contains("RunForgeRuntimeAsync", StringComparison.Ordinal);
+        var registered = program.Contains("AddForgeWolverine", StringComparison.Ordinal);
+
+        // Every gap below has the same remedy, and it is one command rather than the three
+        // hand edits this used to print. The detail still names the specific thing missing —
+        // knowing WHY is what makes the fix trustworthy.
+        const string Remedy = "forge runtime:install";
+
+        // ---- db:seed needs the core package AND the hook -------------------------------
+        if (!core)
+        {
+            yield return CheckResult.Warn("db:seed",
+                $"{PackageId} not referenced - unavailable (Tier 2)", Remedy);
+        }
+        else if (!hooked)
+        {
+            yield return CheckResult.Warn("db:seed",
+                "package referenced but Program.cs has no RunForgeRuntimeAsync hook, " +
+                "so the app never reports a result", Remedy);
+        }
+        else
+        {
+            yield return CheckResult.Pass("db:seed", "available");
+        }
+
+        // ---- invoke:* additionally needs the satellite AND its registration -------------
+        if (!wolverine)
+        {
+            yield return CheckResult.Warn("invoke:*",
+                $"{WolverinePackageId} not referenced - unavailable (Tier 2)", Remedy);
+        }
+        else if (!registered)
+        {
+            yield return CheckResult.Warn("invoke:*",
+                "package referenced but AddForgeWolverine() is not called, so no verb handler is registered",
+                Remedy);
+        }
+        else if (!hooked)
+        {
+            yield return CheckResult.Warn("invoke:*",
+                "registered but Program.cs has no RunForgeRuntimeAsync hook", Remedy);
+        }
+        else
+        {
+            yield return CheckResult.Pass("invoke:*", "available");
+        }
+    }
+
+    /// <summary>
+    /// Matches the id inside the Include attribute, so "Pitechy.Forge.Runtime" is not satisfied
+    /// by a reference to "Pitechy.Forge.Runtime.Wolverine".
+    /// </summary>
+    internal static bool ReferencesPackage(string projectFiles, string packageId) =>
+        projectFiles.Contains($"\"{packageId}\"", StringComparison.OrdinalIgnoreCase);
+
+    private static string ReadProgram(DoctorContext context)
+    {
+        try
+        {
+            var path = context.PathIn(context.Config!.ApiProject, "Program.cs");
+            return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 }
 

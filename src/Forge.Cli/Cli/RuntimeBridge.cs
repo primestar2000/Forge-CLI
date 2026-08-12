@@ -37,7 +37,12 @@ public static class RuntimeBridge
             .EnumerateFiles(project, "*.csproj", SearchOption.TopDirectoryOnly)
             .Any(file =>
             {
-                try { return File.ReadAllText(file).Contains(wanted, StringComparison.OrdinalIgnoreCase); }
+                try
+                {
+                    // Quoted, so "Pitechy.Forge.Runtime" is not satisfied by a reference to
+                    // "Pitechy.Forge.Runtime.Wolverine" — a plain Contains matches the prefix.
+                    return File.ReadAllText(file).Contains($"\"{wanted}\"", StringComparison.OrdinalIgnoreCase);
+                }
                 catch { return false; }
             });
     }

@@ -81,13 +81,32 @@ public static class ForgeRuntimeExtensions
             // render it rather than the user decoding a stack trace from a child process.
             // Expected conditions travel as a bare message; real bugs keep their stack trace,
             // because for those the trace is the useful part.
-            Console.Out.Write(ForgeEnvelope.Failure(verb,
-                ex is ForgeRuntimeException ? ex.Message : ex.ToString()));
+            Console.Out.Write(ForgeEnvelope.Failure(verb, Describe(ex)));
         }
 
         await Console.Out.FlushAsync();
         return true;
     }
+
+    /// <summary>
+    /// Turns an exception into what forge shows the user.
+    ///
+    /// A stack trace is the right answer for a bug and the wrong one for a denial. Being told
+    /// "role 'Guest' cannot execute CreateGenreCommand" is the complete, actionable answer;
+    /// forty frames of Wolverine internals in front of it actively obscure that. An
+    /// authorization failure is an expected outcome of invoke:run against a guarded message,
+    /// so it travels as a bare message like ForgeRuntimeException does.
+    /// </summary>
+    private static string Describe(Exception ex) => ex switch
+    {
+        ForgeRuntimeException => ex.Message,
+        UnauthorizedAccessException => ex.Message,
+
+        // Wolverine wraps handler and middleware exceptions, so the denial arrives nested.
+        { InnerException: UnauthorizedAccessException inner } => inner.Message,
+
+        _ => ex.ToString()
+    };
 
     /// <summary>
     /// Registered handlers win over the built-ins, so a satellite package can extend or replace

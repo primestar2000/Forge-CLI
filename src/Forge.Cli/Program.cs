@@ -213,6 +213,25 @@ makeRepo.SetAction((parse, ct) =>
 
 root.Subcommands.Add(makeRepo);
 
+// -------------------------------------------------------------------- runtime:install
+// Separate from `make:solution --with-runtime` because the need is nearly always discovered
+// after the solution exists — a creation-time flag cannot retrofit a solution already written.
+var runtimeVersionOption = new Option<string?>("--version")
+{
+    Description = "Version of the Pitechy.Forge.Runtime packages (defaults to this forge's version)."
+};
+
+var runtimeInstall = new Command("runtime:install",
+    "Wire the tier-2 runtime into this solution so db:seed and invoke:* work.");
+runtimeInstall.Options.Add(runtimeVersionOption);
+runtimeInstall.WithGlobals();
+runtimeInstall.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "runtime:install",
+        (template, context, token) =>
+            template.PlanRuntimeInstall(context, parse.GetValue(runtimeVersionOption), token), ct));
+
+root.Subcommands.Add(runtimeInstall);
+
 // --------------------------------------------------------------------- init / doctor
 root.Subcommands.Add(InitCommand.Build());
 root.Subcommands.Add(DoctorCommand.Build());

@@ -90,7 +90,11 @@ public static class DoctorCommand
             return Tier.None;
 
         var efOk = results.Any(r => r.Label == "dotnet-ef" && r.Status == CheckStatus.Pass);
-        var runtimeOk = results.Any(r => r.Label == "Forge.Runtime" && r.Status == CheckStatus.Pass);
+        // Tier 2 means EVERY tier-2 capability works. Reporting it when only db:seed is wired
+        // is how doctor came to announce "all commands available" moments before invoke:list
+        // refused for want of the Wolverine satellite.
+        var runtimeOk = results.Any(r => r.Label == "db:seed" && r.Status == CheckStatus.Pass)
+                     && results.Any(r => r.Label == "invoke:*" && r.Status == CheckStatus.Pass);
 
         if (runtimeOk && efOk) return Tier.Runtime;
         if (efOk) return Tier.Migrations;
@@ -132,8 +136,8 @@ public static class DoctorCommand
     private static string TierSummary(Tier tier) => tier switch
     {
         Tier.Runtime => "Tier 2 - all commands available.",
-        Tier.Migrations => "Tier 1 - make:*, stub:*, config:*, db:migrate/migration available. invoke:* and db:seed need Forge.Runtime.",
-        Tier.Scaffolding => "Tier 0 - make:*, stub:*, config:* available. db:* needs dotnet-ef; invoke:* needs Forge.Runtime.",
+        Tier.Migrations => "Tier 1 - make:*, stub:*, config:*, db:migrate/migration available. See the db:seed and invoke:* lines above for what tier 2 still needs.",
+        Tier.Scaffolding => "Tier 0 - make:*, stub:*, config:* available. db:* needs dotnet-ef; tier 2 needs the runtime packages.",
         _ => "No tier available - fix the failures above, or run 'forge init'."
     };
 

@@ -86,9 +86,8 @@ public static class DbCommands
                 else
                 {
                     output.Failure($"x {error}");
-                    output.Dim($"  -> dotnet add {config.ApiProject} package {RuntimeBridge.PackageId}");
-                    output.Dim("  -> then add to Program.cs, before app.Run():");
-                    output.Dim("       if (await app.RunForgeRuntimeAsync(args)) return;");
+                    output.Dim("  -> forge runtime:install");
+                    output.Dim("     (adds the package and wires Program.cs; --dry-run to preview)");
                 }
                 return ExitCodes.ConfigInvalid;
             }

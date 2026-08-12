@@ -71,9 +71,14 @@ internal static class SolutionScaffold
         // reports Tier 2 as unavailable and prints the exact `dotnet add package` command.
         // Runtime and CLI ship in lockstep, so the CLI's version is the right default; they only
         // ever have to agree on the JSON envelope schema, not on assembly versions.
+        // BOTH packages, not just the core one. This template IS Wolverine-based, so there is no
+        // scenario where someone opts into the runtime here and does not want invoke:*. Shipping
+        // only the core package left three manual steps between --with-runtime and a working
+        // invoke:list — observed on a real project, and the reason this emits the pair.
         var runtimeReference = spec.WithRuntime
             ? $"    <!-- Tier 2: enables db:seed and invoke:*. -->{Environment.NewLine}" +
-              $"    <PackageReference Include=\"Pitechy.Forge.Runtime\" Version=\"{ForgeVersion.Current}\" />"
+              $"    <PackageReference Include=\"Pitechy.Forge.Runtime\" Version=\"{ForgeVersion.Current}\" />{Environment.NewLine}" +
+              $"    <PackageReference Include=\"Pitechy.Forge.Runtime.Wolverine\" Version=\"{ForgeVersion.Current}\" />"
             : string.Empty;
 
         var projectModel = new Dictionary<string, string>
@@ -221,7 +226,17 @@ internal static class SolutionScaffold
                 ["DbContextNamespace"] = dbContextNs,
                 ["DbContextName"] = spec.ResolvedDbContextName,
                 ["CurrentUserRegistration"] = RenderCurrentUserRegistration(spec),
-                ["ForgeRuntimeUsing"] = spec.WithRuntime ? "using Forge.Runtime;" + Environment.NewLine : string.Empty,
+                ["ForgeRuntimeUsing"] = spec.WithRuntime
+                    ? "using Forge.Runtime;" + Environment.NewLine +
+                      "using Forge.Runtime.Wolverine;" + Environment.NewLine
+                    : string.Empty,
+                ["ForgeWolverineRegistration"] = spec.WithRuntime
+                    ? Environment.NewLine +
+                      "// Registers the invoke:list and invoke:run verb handlers. Adds no behaviour" + Environment.NewLine +
+                      "// to a normal start — RunForgeRuntimeAsync only dispatches when forge launched" + Environment.NewLine +
+                      "// this process." + Environment.NewLine +
+                      "builder.Services.AddForgeWolverine();"
+                    : string.Empty,
                 ["ForgeRuntimeHook"] = spec.WithRuntime
                     ? Environment.NewLine +
                       "// forge hook. No-op on a normal start; short-circuits only when forge launched" + Environment.NewLine +

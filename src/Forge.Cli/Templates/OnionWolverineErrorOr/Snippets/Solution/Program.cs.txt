@@ -23,6 +23,7 @@ builder.Services.AddDbContext<{{DbContextName}}>(options =>
 
 // Repositories and IUnitOfWork. make:repo appends new registrations to AddInfrastructure.
 builder.Services.AddInfrastructure();
+{{ForgeWolverineRegistration}}
 
 builder.Host.UseWolverine(options =>
 {

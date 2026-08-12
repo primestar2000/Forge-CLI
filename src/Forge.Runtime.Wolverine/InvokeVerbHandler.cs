@@ -22,6 +22,13 @@ public sealed class InvokeVerbHandler : IForgeVerbHandler
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+
+        // Case-insensitive on the way IN, because the payload is hand-typed at a shell against
+        // a C# record whose properties are PascalCase. Without this,
+        // --payload '{"Reference":"x"}' binds nothing, the message is constructed with every
+        // property null, and the command reports success having written a row of nulls. Silent
+        // wrong data is far worse than a parse error. Observed on a real project.
+        PropertyNameCaseInsensitive = true,
         WriteIndented = false
     };
 

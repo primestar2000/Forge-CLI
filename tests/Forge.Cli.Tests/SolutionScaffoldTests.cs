@@ -31,6 +31,12 @@ public class SolutionScaffoldTests
         return result.Plan;
     }
 
+    /// <summary>Content of the single planned file whose name ends with <paramref name="endsWith"/>.</summary>
+    private static string ContentOf(GenerationPlan plan, string endsWith) =>
+        plan.Actions.OfType<FileAction.Create>()
+            .Single(a => a.Path.EndsWith(endsWith, StringComparison.Ordinal))
+            .Content;
+
     [Fact]
     public void Scaffolds_projects_solution_config_and_tool_manifest()
     {
@@ -42,6 +48,53 @@ public class SolutionScaffoldTests
         Assert.Contains("OfficeCommute.Infrastructure.csproj", files);
         Assert.Contains("OfficeCommute.API.csproj", files);
         Assert.Contains("forge.config.json", files);
+    }
+
+    /// <summary>
+    /// --with-runtime must wire tier 2 COMPLETELY. This template is Wolverine-based, so there is
+    /// no scenario where someone opts into the runtime and does not want invoke:*. Emitting only
+    /// the core package left three manual steps between --with-runtime and a working invoke:list,
+    /// which is what a real project hit.
+    /// </summary>
+    [Fact]
+    public async Task With_runtime_wires_tier_two_completely()
+    {
+        var (ctx, _) = Context();
+        var result = await new Templates.OnionWolverineErrorOr.OnionWolverineErrorOrTemplate()
+            .PlanSolution(ctx, Spec() with { WithRuntime = true }, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+
+        var csproj = ContentOf(result.Plan, "OfficeCommute.API.csproj");
+        Assert.Contains("Pitechy.Forge.Runtime\"", csproj);
+        Assert.Contains("Pitechy.Forge.Runtime.Wolverine\"", csproj);
+
+        var program = ContentOf(result.Plan, "Program.cs");
+        Assert.Contains("using Forge.Runtime;", program);
+        Assert.Contains("using Forge.Runtime.Wolverine;", program);
+        Assert.Contains("builder.Services.AddForgeWolverine();", program);
+        Assert.Contains("RunForgeRuntimeAsync(args)", program);
+        Assert.Contains("IsForgeInvocation(args)", program);
+    }
+
+    /// <summary>Tier 2 is opt-in: without the flag nothing forge-specific may appear.</summary>
+    [Fact]
+    public async Task Without_runtime_the_scaffold_has_no_forge_dependency()
+    {
+        var (ctx, _) = Context();
+        var result = await new Templates.OnionWolverineErrorOr.OnionWolverineErrorOrTemplate()
+            .PlanSolution(ctx, Spec(), CancellationToken.None);
+
+        Assert.DoesNotContain("Pitechy.Forge", ContentOf(result.Plan, "OfficeCommute.API.csproj"));
+
+        var program = ContentOf(result.Plan, "Program.cs");
+        Assert.DoesNotContain("Forge.Runtime", program);
+        Assert.DoesNotContain("AddForgeWolverine", program);
+
+        // Scoped is the only correct lifetime for a real web request; the singleton swap exists
+        // solely for a forge invocation and must not leak into a solution without the runtime.
+        Assert.Contains("AddScoped<CurrentUser>()", program);
+        Assert.DoesNotContain("AddSingleton<CurrentUser>()", program);
     }
 
     /// <summary>
