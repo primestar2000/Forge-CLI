@@ -16,6 +16,29 @@ dotnet build          # 0 warnings, 0 errors
 
 That sequence writes 26 files and compiles clean. No hand-written code required.
 
+Entities come out **encapsulated** — private setters, a constructor, and an `Update` method,
+because a freely mutable entity contradicts the architecture the rest of the template builds:
+
+```csharp
+public class Order
+{
+    public Guid Id { get; private set; }
+
+    public string Reference { get; private set; } = string.Empty;
+    public decimal Total { get; private set; }
+
+    private Order() { }                                  // EF Core materialisation
+
+    public Order(string reference, decimal total) { ... }
+    public void Update(string reference, decimal total) { ... }
+}
+```
+
+`Update` changes everything at once because that is all a generator can honestly infer — split it
+into intention-revealing methods (`Rename`, `Reprice`, `Cancel`) as the domain earns them. Prefer
+the anemic shape? `--public-setters` for one entity, `"encapsulateEntities": false` for the
+solution.
+
 ## Install
 
 The only prerequisite is the .NET SDK.

@@ -62,9 +62,10 @@ public sealed class ScaffoldHarness : IDisposable
         return Apply(await _template.PlanSolution(context, spec, CancellationToken.None));
     }
 
-    public Task<ExecutionResult> MakeEntity(string name, string properties) =>
+    public Task<ExecutionResult> MakeEntity(string name, string properties, bool encapsulated = true) =>
         Run(ctx => _template.PlanEntity(ctx,
-            new EntitySpec(name, PropertyParser.Parse(properties).Properties), CancellationToken.None));
+            new EntitySpec(name, PropertyParser.Parse(properties).Properties, Encapsulated: encapsulated),
+            CancellationToken.None));
 
     public Task<ExecutionResult> MakeRepository(string entity) =>
         Run(ctx => _template.PlanRepository(ctx, entity, CancellationToken.None));

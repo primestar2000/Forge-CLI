@@ -50,6 +50,16 @@ public sealed class ForgeConfig
     public string ResolvedDbContextName =>
         string.IsNullOrWhiteSpace(DbContextName) ? $"{SolutionName}DbContext" : DbContextName;
 
+    /// <summary>
+    /// Entities get private setters, a constructor and an Update method rather than public
+    /// setters. On by default: this is an onion/DDD template, and a freely mutable entity
+    /// contradicts the architecture it promises.
+    ///
+    /// Set false for the anemic shape across the whole solution;
+    /// <c>make:entity --public-setters</c> overrides it for one entity.
+    /// </summary>
+    public bool EncapsulateEntities { get; set; } = true;
+
     public string RoleEnum { get; set; } = "UserRole";
 
     /// <summary>"single-array" or "role-and-subrole" — the two shapes seen in the wild.</summary>

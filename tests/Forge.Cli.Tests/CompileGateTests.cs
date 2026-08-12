@@ -62,6 +62,30 @@ public class CompileGateTests
     }
 
     /// <summary>
+    /// Both entity shapes must build warning-free, and warnings are the point here: the
+    /// encapsulated shape materialises through a parameterless constructor, so a non-nullable
+    /// property without an initializer warns CS8618 on every entity. Only the compiler sees it.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Both_entity_shapes_compile_clean(bool encapsulated)
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array");
+
+        // Event collides with a keyword once camelCased into a constructor parameter.
+        await harness.MakeEntity("Order",
+            "Reference:string,Total:decimal,Notes:string?,Event:string,PlacedOn:DateTime", encapsulated);
+
+        await harness.MakeRepository("Order");
+        await harness.MakeResource("Order");
+
+        AssertClean(harness.Build());
+    }
+
+    /// <summary>
     /// Re-running every generator must be a no-op that still compiles. A patcher that inserted a
     /// duplicate member would break the build here even though each individual patch reported
     /// success.

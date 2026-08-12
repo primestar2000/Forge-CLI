@@ -3,7 +3,16 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace Forge.Cli.Templates;
 
 /// <summary>What make:entity was asked to build.</summary>
-public sealed record EntitySpec(string Name, IReadOnlyList<PropertySpec> Properties, bool SkipDbSet = false);
+/// <param name="Encapsulated">
+/// Private setters plus a generated constructor and Update method, rather than public setters.
+/// The default, because this template is an onion/DDD template and a freely mutable entity
+/// contradicts the architecture it promises. <c>--public-setters</c> opts out.
+/// </param>
+public sealed record EntitySpec(
+    string Name,
+    IReadOnlyList<PropertySpec> Properties,
+    bool SkipDbSet = false,
+    bool Encapsulated = true);
 
 public sealed record PropertySpec(string Name, string Type, bool IsNullable)
 {
@@ -12,6 +21,9 @@ public sealed record PropertySpec(string Name, string Type, bool IsNullable)
     /// <summary>
     /// Non-nullable reference types need an initializer or the compiler warns CS8618 on every
     /// generated entity. Value types and nullable types do not.
+    ///
+    /// This carries the encapsulated shape too: the EF materialisation constructor is
+    /// parameterless, so without an initializer every non-nullable string warns there as well.
     /// </summary>
     public string? Initializer => (IsNullable, Type) switch
     {
@@ -20,10 +32,39 @@ public sealed record PropertySpec(string Name, string Type, bool IsNullable)
         _ => null
     };
 
-    public string Render() =>
-        Initializer is null
-            ? $"public {DeclaredType} {Name} {{ get; set; }}"
-            : $"public {DeclaredType} {Name} {{ get; set; }} = {Initializer};";
+    /// <summary>
+    /// The property as a constructor or method parameter: camelCased, and escaped with @ when
+    /// that collides with a keyword. An entity with a property named Event or Class would
+    /// otherwise generate a constructor that does not parse.
+    /// </summary>
+    public string ParameterName
+    {
+        get
+        {
+            var camel = Name.Length == 0
+                ? Name
+                : char.ToLowerInvariant(Name[0]) + Name[1..];
+
+            return SyntaxFacts.GetKeywordKind(camel) == SyntaxKind.None
+                   && SyntaxFacts.GetContextualKeywordKind(camel) == SyntaxKind.None
+                ? camel
+                : "@" + camel;
+        }
+    }
+
+    public string Parameter => $"{DeclaredType} {ParameterName}";
+
+    /// <summary>Assignment inside a constructor or Update, with @ stripped from the target.</summary>
+    public string Assignment => $"{Name} = {ParameterName};";
+
+    public string Render(bool encapsulated = false)
+    {
+        var setter = encapsulated ? "get; private set;" : "get; set;";
+
+        return Initializer is null
+            ? $"public {DeclaredType} {Name} {{ {setter} }}"
+            : $"public {DeclaredType} {Name} {{ {setter} }} = {Initializer};";
+    }
 }
 
 public sealed record PropertyParseResult(IReadOnlyList<PropertySpec> Properties, string? Error)

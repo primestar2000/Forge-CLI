@@ -128,6 +128,19 @@ else it improves.
    lives behind `ITemplate` only. If `Program.cs`, `ConfigLoader`, or `PlanExecutor` mentions
    `Wolverine`, that's a layering violation.
 9. **No telemetry. Ever.** This is a stated product promise.
+10. **Entities are encapsulated by default.** `make:entity` emits `private set` plus a
+    constructor and an `Update` method. This template is an onion/DDD template; an entity anyone
+    can mutate field by field contradicts the architecture its own name promises, and a default
+    is what ~95% of generated code will actually look like. `--public-setters` opts out for one
+    entity, `encapsulateEntities: false` for a solution.
+
+    Two things the shape depends on, both load-bearing:
+    - **The parameterless `private` constructor must stay.** EF Core materialises through it.
+    - **Non-nullable strings keep `= string.Empty`.** That constructor sets nothing, so without
+      the initializer every encapsulated entity warns CS8618 and the compile gate fails.
+
+    An entity with no properties emits *only* the private constructor — a generated public one
+    would be parameterless and collide with it.
 
 ---
 
