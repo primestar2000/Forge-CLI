@@ -93,4 +93,42 @@ public sealed class TemplateContext(
 
     public string Usings(params string[] namespaces) =>
         CodeStyleFormatter.UsingsFor(CodeStyle, namespaces);
+
+    /// <summary>
+    /// Usings for a generated file, resolved from the TYPES it references rather than guessed.
+    ///
+    /// Anything a generator emits with user-chosen property types needs this. A property of type
+    /// OrderStatus compiles only if the enum's namespace is imported, and nothing else in the
+    /// generated file brings it in — the enum lands in the domain's Enums namespace while the
+    /// entity, the response and the message record land in three other namespaces. Reported from
+    /// the field as "Book and BookResponse were generated without using Library.Domain.Enums".
+    ///
+    /// Resolution is by bare type name against the domain and application indexes, so it is
+    /// purely syntactic. Generic and array types are deliberately not resolved: picking the
+    /// namespace for List&lt;T&gt; means parsing the type argument, and guessing wrong emits a
+    /// using for a type that is not there.
+    /// </summary>
+    public string UsingsForTypes(
+        IEnumerable<string> typeNames,
+        string targetNamespace,
+        params string[] alwaysInclude)
+    {
+        var namespaces = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var ns in alwaysInclude) namespaces.Add(ns);
+
+        foreach (var typeName in typeNames)
+        {
+            var bare = typeName.TrimEnd('?');
+
+            var declaring = DomainIndex.Types.FirstOrDefault(t => t.Name == bare)
+                            ?? ApplicationIndex.Types.FirstOrDefault(t => t.Name == bare);
+
+            if (declaring?.Namespace is { Length: > 0 } ns && ns != targetNamespace)
+            {
+                namespaces.Add(ns);
+            }
+        }
+
+        return Usings([.. namespaces]);
+    }
 }

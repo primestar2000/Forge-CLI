@@ -63,7 +63,8 @@ internal static class EntityScaffold
         {
             var tokens = new Dictionary<string, string>
             {
-                ["Usings"] = ctx.Usings([.. UsingsFor(ctx, declared, entitiesNamespace)]),
+                ["Usings"] = ctx.UsingsForTypes(
+                    declared.Select(p => p.Type), entitiesNamespace, "System"),
                 ["Namespace"] = entitiesNamespace,
                 ["Entity"] = name,
                 ["BaseClass"] = baseName.Length > 0 ? $" : {baseName}" : string.Empty,
@@ -126,35 +127,6 @@ internal static class EntityScaffold
 
             _ => PlanResult.Fail(Cli.ExitCodes.Error, "Unknown patch outcome.")
         };
-    }
-
-    /// <summary>
-    /// Namespaces the generated entity needs, resolved from the property types themselves.
-    ///
-    /// Without this, an entity with an enum property does not compile: make:enum puts the enum
-    /// in the domain's Enums namespace, the entity lands in Entities, and nothing brings the two
-    /// together. Purely syntactic — the type is matched by name against the domain index, never
-    /// through a SemanticModel.
-    /// </summary>
-    private static IEnumerable<string> UsingsFor(
-        TemplateContext ctx, IReadOnlyList<PropertySpec> properties, string entityNamespace)
-    {
-        var namespaces = new SortedSet<string>(StringComparer.Ordinal) { "System" };
-
-        foreach (var property in properties)
-        {
-            // Only a bare type name can be resolved this way; generics and arrays are left to
-            // the developer rather than guessed at.
-            var declared = ctx.DomainIndex.Types
-                .FirstOrDefault(t => t.Name == property.Type);
-
-            if (declared?.Namespace is { Length: > 0 } ns && ns != entityNamespace)
-            {
-                namespaces.Add(ns);
-            }
-        }
-
-        return namespaces;
     }
 
     /// <summary>

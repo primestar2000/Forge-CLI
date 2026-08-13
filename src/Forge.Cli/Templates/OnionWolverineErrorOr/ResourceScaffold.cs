@@ -86,7 +86,11 @@ internal static class ResourceScaffold
             plan = plan.With(new FileAction.Create(responsePath, ctx.Render("Response.cs.txt",
                 new Dictionary<string, string>
                 {
-                    ["Usings"] = ctx.Usings("System"),
+                    // The response projects the entity's properties, so it inherits the entity's
+                    // type dependencies — an enum-typed column needs the enum's namespace here
+                    // just as much as it does on the entity itself.
+                    ["Usings"] = ctx.UsingsForTypes(
+                        selection.Properties.Select(p => p.Type), resourceNamespace, "System"),
                     ["Namespace"] = resourceNamespace,
                     ["Response"] = responseName,
                     ["Audience"] = DescribeAudience(spec),

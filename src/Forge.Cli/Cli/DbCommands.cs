@@ -27,19 +27,19 @@ public static class DbCommands
     {
         yield return Make("db:migration", "Create a new EF Core migration, with project paths resolved from config.",
             command => command.Arguments.Add(MigrationName),
-            (config, parse) => EfTool.MigrationsAdd(config, parse.GetValue(MigrationName)!));
+            (config, root, parse) => EfTool.MigrationsAdd(config, root, parse.GetValue(MigrationName)!));
 
         yield return Make("db:migrate", "Apply pending migrations to the database.",
             _ => { },
-            (config, _) => EfTool.DatabaseUpdate(config));
+            (config, root, _) => EfTool.DatabaseUpdate(config, root));
 
         yield return Make("db:rollback", "Revert the database to an earlier migration.",
             command => command.Options.Add(ToOption),
-            (config, parse) => EfTool.DatabaseUpdate(config, parse.GetValue(ToOption) ?? "0"));
+            (config, root, parse) => EfTool.DatabaseUpdate(config, root, parse.GetValue(ToOption) ?? "0"));
 
         yield return Make("db:status", "List migrations and show which are applied.",
             _ => { },
-            (config, _) => EfTool.MigrationsList(config));
+            (config, root, _) => EfTool.MigrationsList(config, root));
 
         yield return BuildFresh();
         yield return BuildSeed();
@@ -159,7 +159,7 @@ public static class DbCommands
         string name,
         string description,
         Action<Command> configure,
-        Func<ForgeConfig, ParseResult, EfCommand> build)
+        Func<ForgeConfig, string, ParseResult, EfCommand> build)
     {
         var command = new Command(name, description);
         configure(command);
@@ -189,10 +189,10 @@ public static class DbCommands
                 return ExitCodes.UsageError;
             }
 
-            var drop = Execute(parse, "db:fresh", (config, _) => EfTool.DatabaseDrop(config), destructive: true);
+            var drop = Execute(parse, "db:fresh", (config, root, _) => EfTool.DatabaseDrop(config, root), destructive: true);
             if (drop != ExitCodes.Success) return drop;
 
-            return Execute(parse, "db:fresh", (config, _) => EfTool.DatabaseUpdate(config), destructive: true);
+            return Execute(parse, "db:fresh", (config, root, _) => EfTool.DatabaseUpdate(config, root), destructive: true);
         });
         return command;
     }
@@ -200,7 +200,7 @@ public static class DbCommands
     private static int Execute(
         ParseResult parse,
         string commandName,
-        Func<ForgeConfig, ParseResult, EfCommand> build,
+        Func<ForgeConfig, string, ParseResult, EfCommand> build,
         bool destructive)
     {
         var json = parse.GetValue(GlobalOptions.Json);
@@ -228,7 +228,7 @@ public static class DbCommands
             return ExitCodes.EnvironmentGuard;
         }
 
-        var command = build(loaded.Config!, parse);
+        var command = build(loaded.Config!, loaded.SolutionRoot!, parse);
 
         if (dryRun)
         {
@@ -270,7 +270,10 @@ public static class DbCommands
 
         if (!json) output.Dim($"  {command.Display}");
 
-        return EfTool.Run(command, loaded.SolutionRoot!, output);
+        // Runs from the API project directory, not the solution root, so a relative SQLite
+        // connection string resolves to the same file `dotnet run` uses. See
+        // EfTool.WorkingDirectoryFor.
+        return EfTool.Run(command, EfTool.WorkingDirectoryFor(loaded.Config!, loaded.SolutionRoot!), output);
     }
 
     private static string Payload(string command, int exitCode, string? invocation, string? error = null)

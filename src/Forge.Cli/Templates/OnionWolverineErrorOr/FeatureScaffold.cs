@@ -51,7 +51,7 @@ internal static class FeatureScaffold
         var enumsNamespace = Namespaces.For(config.DomainNamespace, "Enums");
 
         var (guardDeclaration, guardBody) = RenderGuard(ctx, spec);
-        var guardUsings = BuildGuardUsings(ctx, spec, domainAuthNamespace, enumsNamespace);
+        var guardNamespaces = GuardNamespaces(spec, domainAuthNamespace, enumsNamespace);
 
         var returns = string.IsNullOrWhiteSpace(spec.Returns) ? "Success" : NameHelper.Pascal(spec.Returns!);
 
@@ -83,8 +83,16 @@ internal static class FeatureScaffold
         plan = plan.Concat(ctx.CreateOrSkip(messagePath, () => ctx.Render("Message.cs.txt",
             new Dictionary<string, string>
             {
-                ["Usings"] = ctx.Usings("System"),
-                ["GuardUsings"] = guardUsings,
+                // One using block, deduplicated: the message record's property types and the
+                // role guard's namespaces routinely overlap.
+                ["Usings"] = ctx.UsingsForTypes(
+                    spec.Properties.Select(p => p.Type),
+                    featureNamespace,
+                    ["System", .. guardNamespaces]),
+
+                // Kept so a stub published before this change still substitutes cleanly; its
+                // content now lives in Usings.
+                ["GuardUsings"] = string.Empty,
                 ["Namespace"] = featureNamespace,
                 ["Message"] = message,
                 ["Parameters"] = RenderParameters(spec.Properties, ctx.CodeStyle.IndentUnit),
@@ -178,22 +186,22 @@ internal static class FeatureScaffold
         return (" : IRequiresExplicitRoles", subRoleBody.ToString());
     }
 
-    private static string BuildGuardUsings(
-        TemplateContext ctx,
+    /// <summary>
+    /// Namespaces the role guard needs — the marker interface, and the role enum unless the
+    /// message is anonymous.
+    ///
+    /// Returned as a list rather than rendered text so it can be merged with the namespaces the
+    /// property types need. Emitting them as two independent blocks produced CS0105 the moment a
+    /// property's type lived in the same namespace as the role enum, which is exactly where
+    /// make:enum puts one.
+    /// </summary>
+    private static string[] GuardNamespaces(
         FeatureSpec spec,
         string domainAuthNamespace,
-        string enumsNamespace)
-    {
-        var usings = new List<string> { domainAuthNamespace };
-        if (!spec.Anonymous) usings.Add(enumsNamespace);
-
-        var sb = new StringBuilder();
-        foreach (var ns in usings.Distinct().OrderBy(n => n, StringComparer.Ordinal))
-            sb.Append("using ").Append(ns).Append(';').Append('\n');
-
-        sb.Append('\n');
-        return sb.ToString();
-    }
+        string enumsNamespace) =>
+        spec.Anonymous
+            ? [domainAuthNamespace]
+            : [domainAuthNamespace, enumsNamespace];
 
     private static string RenderParameters(IReadOnlyList<PropertySpec> properties, string indent)
     {

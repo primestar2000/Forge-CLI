@@ -146,7 +146,14 @@ else it improves.
     using when the flag was on, which silently omitted project-local ones — an entity with an
     enum property did not compile. Emitting a redundant using is harmless; omitting a needed one
     is not, so keep that list conservative.
-12. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
+12. **`db:*` runs from the API project directory, not the solution root.** A relative SQLite
+    connection string resolves against the working directory, and `dotnet run` — which `db:seed`
+    and `invoke:*` use — is pinned to the project folder by the Web SDK (verified;
+    `--no-launch-profile` does not change it, and a console project behaves differently). Running
+    `dotnet ef` from the solution root therefore created a *second* database there while the
+    application read the one beside the API project. `EfTool.WorkingDirectoryFor` is the single
+    place that decides this, and `--project`/`--startup-project` are absolute because of it.
+13. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
     domain project and omits every property it declares, so a base carrying `Id` and audit
     timestamps does not produce CS0108 on every entity. If the class is not found, `make:entity`
     stops with exit 3 rather than guessing — assume it has `Id` and the entity reaches EF with no

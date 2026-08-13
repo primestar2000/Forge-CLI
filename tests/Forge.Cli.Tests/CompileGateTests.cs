@@ -110,6 +110,37 @@ public class CompileGateTests
     }
 
     /// <summary>
+    /// The enum has to reach every generated file that names it, not just the entity.
+    ///
+    /// From a field report: "Book and BookResponse were generated without
+    /// using Library.Domain.Enums — solution didn't compile until I hand-fixed 2 files." The
+    /// entity was fixed first and the response and message record were missed, because each
+    /// generator hardcoded its own using list. This covers all three at once.
+    /// </summary>
+    [Fact]
+    public async Task An_enum_reaches_the_entity_the_response_and_the_message()
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array");
+
+        await harness.MakeEnum("BookStatus", "Available,Borrowed,Lost");
+        await harness.MakeEntity("Book", "Title:string,Status:BookStatus");
+
+        // The response projects the entity, so it inherits the enum-typed property.
+        await harness.MakeResource("Book");
+        await harness.MakeResource("Book", audience: "admin");
+
+        // The message record names the enum directly via --properties.
+        await harness.MakeFeature("BorrowBook", MessageKind.Command, ["User"], group: "Books",
+            properties: "Title:string,Status:BookStatus");
+
+        await harness.MakeRepository("Book");
+
+        AssertClean(harness.Build());
+    }
+
+    /// <summary>
     /// A base class carrying Id changes where EF finds the key and where every repository's
     /// generic constraint resolves. Redeclaring an inherited member is a CS0108 warning, which
     /// this gate fails on — and none of it is visible to a plan assertion.

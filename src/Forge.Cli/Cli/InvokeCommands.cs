@@ -18,6 +18,20 @@ public static class InvokeCommands
     private static readonly Option<string> PayloadOption =
         new("--payload") { Description = "JSON payload. Wins over any factory." };
 
+    /// <summary>
+    /// Reads the payload from a file instead of the command line.
+    ///
+    /// Exists because PowerShell and cmd mangle the quotes in inline JSON — a reported
+    /// annoyance that forces --% or manual escaping on Windows. A file has no quoting rules at
+    /// all, and it is the better option for any payload big enough to be worth keeping.
+    /// </summary>
+    private static readonly Option<string> PayloadFileOption =
+        new("--payload-file")
+        {
+            Description = "Path to a file containing the JSON payload. Avoids shell quote " +
+                          "mangling; use instead of --payload."
+        };
+
     private static readonly Option<string> FactoryOption =
         new("--factory") { Description = "IForgeMessageFactory to build the payload with." };
 
@@ -66,7 +80,7 @@ public static class InvokeCommands
             "Run one message through the real Wolverine pipeline and print the result.");
 
         command.Arguments.Add(MessageArgument);
-        foreach (var option in new Option[] { PayloadOption, FactoryOption, StateOption, AsRoleOption, AsOption, NoBuildOption, ProductionOverride })
+        foreach (var option in new Option[] { PayloadOption, PayloadFileOption, FactoryOption, StateOption, AsRoleOption, AsOption, NoBuildOption, ProductionOverride })
             command.Options.Add(option);
 
         command.WithGlobals();
@@ -80,6 +94,42 @@ public static class InvokeCommands
                 if (!string.IsNullOrWhiteSpace(value)) { arguments.Add("--forge-" + name); arguments.Add(value!); }
             }
 
+            var payloadFile = parse.GetValue(PayloadFileOption);
+            if (!string.IsNullOrWhiteSpace(payloadFile))
+            {
+                if (!string.IsNullOrWhiteSpace(parse.GetValue(PayloadOption)))
+                {
+                    return Fail(parse, "invoke:run",
+                        "--payload and --payload-file were both given, and they set the same thing." +
+                        Environment.NewLine + "  -> Pass only one.");
+                }
+
+                var resolved = Path.GetFullPath(payloadFile!);
+                if (!File.Exists(resolved))
+                {
+                    return Fail(parse, "invoke:run", $"Payload file not found: {resolved}");
+                }
+
+                string contents;
+                try { contents = File.ReadAllText(resolved); }
+                catch (Exception ex)
+                {
+                    return Fail(parse, "invoke:run", $"Could not read {resolved}: {ex.Message}");
+                }
+
+                // Validated here so a malformed file fails in milliseconds, rather than after a
+                // build and a host start inside the user's application.
+                try { System.Text.Json.Nodes.JsonNode.Parse(contents); }
+                catch (Exception ex)
+                {
+                    return Fail(parse, "invoke:run",
+                        $"{resolved} is not valid JSON: {ex.Message}");
+                }
+
+                arguments.Add("--forge-payload");
+                arguments.Add(contents);
+            }
+
             Add(PayloadOption, "payload");
             Add(FactoryOption, "factory");
             Add(StateOption, "state");
@@ -89,6 +139,18 @@ public static class InvokeCommands
         });
 
         return command;
+    }
+
+    /// <summary>Usage error, rendered the same way in both human and JSON modes.</summary>
+    private static int Fail(ParseResult parse, string commandName, string error)
+    {
+        var json = parse.GetValue(GlobalOptions.Json);
+        var output = new Output(json, parse.GetValue(GlobalOptions.NoColor));
+
+        if (json) output.Json(Envelope(commandName, ExitCodes.UsageError, null, error));
+        else output.Failure($"x {error}");
+
+        return ExitCodes.UsageError;
     }
 
     private static int Execute(

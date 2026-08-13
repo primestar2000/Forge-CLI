@@ -72,7 +72,9 @@ var enumNameOption = new Option<string>("--name", "-n")
     Required = true
 };
 
-var enumValuesOption = new Option<string>("--values", "-v")
+// No -v alias: that is the global --verbosity on every other command, and binding it to
+// something else here means `make:enum -v detailed` silently sets the member list instead.
+var enumValuesOption = new Option<string>("--values")
 {
     Description = "Comma-separated members, optionally numbered: \"Pending,Paid\" or \"Pending=1,Paid=2\".",
     Required = true

@@ -31,27 +31,46 @@ public sealed record EfCommand(IReadOnlyList<string> Arguments)
 /// </summary>
 public static class EfTool
 {
-    public static EfCommand MigrationsAdd(ForgeConfig config, string name) =>
-        new([..Verb("migrations", "add"), name, .. Targets(config),
+    public static EfCommand MigrationsAdd(ForgeConfig config, string solutionRoot, string name) =>
+        new([..Verb("migrations", "add"), name, .. Targets(config, solutionRoot),
              "--output-dir", config.InfrastructureMigrationsPath]);
 
-    public static EfCommand DatabaseUpdate(ForgeConfig config, string? targetMigration = null) =>
+    public static EfCommand DatabaseUpdate(ForgeConfig config, string solutionRoot, string? targetMigration = null) =>
         new(targetMigration is null
-            ? [.. Verb("database", "update"), .. Targets(config)]
-            : [.. Verb("database", "update"), targetMigration, .. Targets(config)]);
+            ? [.. Verb("database", "update"), .. Targets(config, solutionRoot)]
+            : [.. Verb("database", "update"), targetMigration, .. Targets(config, solutionRoot)]);
 
-    public static EfCommand MigrationsList(ForgeConfig config) =>
-        new([.. Verb("migrations", "list"), .. Targets(config)]);
+    public static EfCommand MigrationsList(ForgeConfig config, string solutionRoot) =>
+        new([.. Verb("migrations", "list"), .. Targets(config, solutionRoot)]);
 
-    public static EfCommand DatabaseDrop(ForgeConfig config) =>
-        new([.. Verb("database", "drop"), "--force", .. Targets(config)]);
+    public static EfCommand DatabaseDrop(ForgeConfig config, string solutionRoot) =>
+        new([.. Verb("database", "drop"), "--force", .. Targets(config, solutionRoot)]);
+
+    /// <summary>
+    /// Directory every db:* command runs from — the API project, NOT the solution root.
+    ///
+    /// This has to match where `dotnet run` puts the app, because that is what db:seed and
+    /// invoke:* use and neither forge nor the user can move it: the Web SDK sets the run
+    /// working directory to the project folder, and --no-launch-profile does not change it.
+    /// A relative connection string like "Data Source=Shop.db" resolves against the working
+    /// directory, so running ef from the solution root created a SECOND database there while
+    /// the application read the one beside the API project. Reported from the field as "two DB
+    /// files, easy to be confused about which is live".
+    /// </summary>
+    public static string WorkingDirectoryFor(ForgeConfig config, string solutionRoot) =>
+        Path.GetFullPath(Path.Combine(solutionRoot, config.ApiProject));
 
     private static string[] Verb(string group, string action) => ["ef", group, action];
 
-    private static string[] Targets(ForgeConfig config) =>
+    /// <summary>
+    /// Project paths are made absolute because the command runs from the API directory rather
+    /// than the solution root. Absolute also keeps the --dry-run output copy-pasteable from
+    /// anywhere, which relative-to-the-API-folder paths would not be.
+    /// </summary>
+    private static string[] Targets(ForgeConfig config, string solutionRoot) =>
     [
-        "--project", config.InfrastructureProject,
-        "--startup-project", config.ApiProject,
+        "--project", Path.GetFullPath(Path.Combine(solutionRoot, config.InfrastructureProject)),
+        "--startup-project", Path.GetFullPath(Path.Combine(solutionRoot, config.ApiProject)),
         // Passing --context explicitly keeps behaviour deterministic in a solution that grows a
         // second DbContext. doctor already verifies the configured name actually exists.
         "--context", config.ResolvedDbContextName

@@ -11,6 +11,9 @@ namespace Forge.Cli.Tests;
 [Collection(Infrastructure.EnvironmentCollection.Name)]
 public class EfToolTests
 {
+    private static readonly string Root =
+        Path.Combine(Path.GetTempPath(), "forge-eftool-root");
+
     private static ForgeConfig Config() => new()
     {
         SolutionName = "Shop",
@@ -31,16 +34,33 @@ public class EfToolTests
 
     private static void AssertTargetsResolved(EfCommand command)
     {
-        // The DbContext lives in Infrastructure; the host that configures it lives in the API.
-        Assert.Equal("src/Shop.Infrastructure", ValueAfter(command, "--project"));
-        Assert.Equal("src/Shop.API", ValueAfter(command, "--startup-project"));
+        // Absolute, because the command runs from the API project directory rather than the
+        // solution root — see EfTool.WorkingDirectoryFor. Relative paths would resolve against
+        // the wrong folder and dotnet-ef would not find either project.
+        Assert.Equal(Path.GetFullPath(Path.Combine(Root, "src/Shop.Infrastructure")),
+            ValueAfter(command, "--project"));
+        Assert.Equal(Path.GetFullPath(Path.Combine(Root, "src/Shop.API")),
+            ValueAfter(command, "--startup-project"));
         Assert.Equal("ShopDbContext", ValueAfter(command, "--context"));
+    }
+
+    /// <summary>
+    /// The whole point of the change: ef and `dotnet run` must resolve a relative SQLite
+    /// connection string to the same file. `dotnet run` uses the project directory for a web
+    /// app and cannot be moved, so ef follows it.
+    /// </summary>
+    [Fact]
+    public void Commands_run_from_the_api_project_not_the_solution_root()
+    {
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(Root, "src/Shop.API")),
+            EfTool.WorkingDirectoryFor(Config(), Root));
     }
 
     [Fact]
     public void MigrationsAdd_passes_name_targets_and_output_dir()
     {
-        var command = EfTool.MigrationsAdd(Config(), "AddOrderTable");
+        var command = EfTool.MigrationsAdd(Config(), Root, "AddOrderTable");
 
         Assert.Equal(["ef", "migrations", "add", "AddOrderTable"], command.Arguments.Take(4));
         AssertTargetsResolved(command);
@@ -50,7 +70,7 @@ public class EfToolTests
     [Fact]
     public void DatabaseUpdate_without_a_target_applies_everything_pending()
     {
-        var command = EfTool.DatabaseUpdate(Config());
+        var command = EfTool.DatabaseUpdate(Config(), Root);
 
         Assert.Equal(["ef", "database", "update"], command.Arguments.Take(3));
         Assert.DoesNotContain(command.Arguments, a => a == "0");
@@ -60,7 +80,7 @@ public class EfToolTests
     [Fact]
     public void DatabaseUpdate_with_a_target_places_it_before_the_flags()
     {
-        var command = EfTool.DatabaseUpdate(Config(), "AddOrderTable");
+        var command = EfTool.DatabaseUpdate(Config(), Root, "AddOrderTable");
 
         Assert.Equal(["ef", "database", "update", "AddOrderTable"], command.Arguments.Take(4));
         AssertTargetsResolved(command);
@@ -69,7 +89,7 @@ public class EfToolTests
     [Fact]
     public void DatabaseDrop_is_non_interactive()
     {
-        var command = EfTool.DatabaseDrop(Config());
+        var command = EfTool.DatabaseDrop(Config(), Root);
 
         Assert.Equal(["ef", "database", "drop"], command.Arguments.Take(3));
         // Without --force ef prompts, and the CLI runs non-interactively.
@@ -80,7 +100,7 @@ public class EfToolTests
     [Fact]
     public void MigrationsList_resolves_targets()
     {
-        var command = EfTool.MigrationsList(Config());
+        var command = EfTool.MigrationsList(Config(), Root);
 
         Assert.Equal(["ef", "migrations", "list"], command.Arguments.Take(3));
         AssertTargetsResolved(command);
@@ -92,7 +112,7 @@ public class EfToolTests
         var config = Config();
         config.DbContextName = "";
 
-        Assert.Contains("ShopDbContext", EfTool.MigrationsList(config).Arguments);
+        Assert.Contains("ShopDbContext", EfTool.MigrationsList(config, Root).Arguments);
     }
 
     /// <summary>
@@ -113,11 +133,11 @@ public class EfToolTests
 
     public static TheoryData<EfCommand> AllCommands() =>
     [
-        EfTool.MigrationsAdd(Config(), "AddOrderTable"),
-        EfTool.DatabaseUpdate(Config()),
-        EfTool.DatabaseUpdate(Config(), "0"),
-        EfTool.MigrationsList(Config()),
-        EfTool.DatabaseDrop(Config())
+        EfTool.MigrationsAdd(Config(), Root, "AddOrderTable"),
+        EfTool.DatabaseUpdate(Config(), Root),
+        EfTool.DatabaseUpdate(Config(), Root, "0"),
+        EfTool.MigrationsList(Config(), Root),
+        EfTool.DatabaseDrop(Config(), Root)
     ];
 
     [Fact]
@@ -126,7 +146,9 @@ public class EfToolTests
         var config = Config();
         config.InfrastructureProject = "src/My Solution.Infrastructure";
 
-        Assert.Contains("\"src/My Solution.Infrastructure\"", EfTool.MigrationsList(config).Display);
+        var expected = Path.GetFullPath(Path.Combine(Root, "src/My Solution.Infrastructure"));
+
+        Assert.Contains($"\"{expected}\"", EfTool.MigrationsList(config, Root).Display);
     }
 
     [Theory]
