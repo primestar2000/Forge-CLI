@@ -23,6 +23,9 @@ public sealed class OnionWolverineErrorOrTemplate : ITemplate
     public Task<PlanResult> PlanEntity(TemplateContext ctx, EntitySpec spec, CancellationToken ct) =>
         Task.FromResult(EntityScaffold.Plan(ctx, spec));
 
+    public Task<PlanResult> PlanEnum(TemplateContext ctx, EnumSpec spec, CancellationToken ct) =>
+        Task.FromResult(EnumScaffold.Plan(ctx, spec));
+
     public Task<PlanResult> PlanResource(TemplateContext ctx, ResourceSpec spec, CancellationToken ct) =>
         Task.FromResult(ResourceScaffold.Plan(ctx, spec));
 

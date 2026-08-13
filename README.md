@@ -8,7 +8,8 @@ convention already dictates.
 
 ```bash
 dotnet forge make:solution -n Shop
-dotnet forge make:entity   -n Order --properties "Reference:string,Total:decimal"
+dotnet forge make:enum     -n OrderStatus --values "Pending,Paid,Shipped"
+dotnet forge make:entity   -n Order --properties "Reference:string,Total:decimal,Status:OrderStatus"
 dotnet forge make:repo     -i Order
 dotnet forge make:feature  -n PlaceOrder --type command --roles User --properties "Reference:string"
 dotnet build          # 0 warnings, 0 errors
@@ -38,6 +39,26 @@ public class Order
 into intention-revealing methods (`Rename`, `Reprice`, `Cancel`) as the domain earns them. Prefer
 the anemic shape? `--public-setters` for one entity, `"encapsulateEntities": false` for the
 solution.
+
+### Enums
+
+```bash
+dotnet forge make:enum -n OrderStatus --values "Pending,Paid=5,Shipped"
+dotnet forge make:enum -n Permission  --values "None,Read,Write,Delete" --flags
+```
+
+`--flags` numbers unnumbered members as powers of two — `None = 0, Read = 1, Write = 2,
+Delete = 4` — because a `[Flags]` enum numbered `0,1,2,3` is a silent bug: `3` isn't a distinct
+flag, it's `Read|Write`. Only a member actually named `None` gets `0`.
+
+Numbering matters generally, not just for flags: EF Core persists an enum as its underlying
+integer, so reordering an unnumbered enum silently reinterprets every row already in the database.
+
+Reference an enum from an entity and forge imports its namespace for you:
+
+```bash
+dotnet forge make:entity -n Order --properties "Status:OrderStatus"
+```
 
 ### Base classes
 

@@ -25,6 +25,8 @@ public interface ITemplate
 
     Task<PlanResult> PlanEntity(TemplateContext ctx, EntitySpec spec, CancellationToken ct);
 
+    Task<PlanResult> PlanEnum(TemplateContext ctx, EnumSpec spec, CancellationToken ct);
+
     Task<PlanResult> PlanRepository(TemplateContext ctx, string entity, CancellationToken ct);
 
     Task<PlanResult> PlanFeature(TemplateContext ctx, FeatureSpec spec, CancellationToken ct);

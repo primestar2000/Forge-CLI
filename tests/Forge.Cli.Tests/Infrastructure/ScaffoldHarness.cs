@@ -69,6 +69,14 @@ public sealed class ScaffoldHarness : IDisposable
             new EntitySpec(name, PropertyParser.Parse(properties).Properties, Encapsulated: encapsulated),
             CancellationToken.None));
 
+    public Task<ExecutionResult> MakeEnum(string name, string values, bool flags = false) =>
+        Run(ctx =>
+        {
+            var parsed = EnumValueParser.Parse(values, flags);
+            Assert.True(parsed.Ok, parsed.Error);
+            return _template.PlanEnum(ctx, new EnumSpec(name, parsed.Members, flags), CancellationToken.None);
+        });
+
     public Task<ExecutionResult> MakeRepository(string entity) =>
         Run(ctx => _template.PlanRepository(ctx, entity, CancellationToken.None));
 

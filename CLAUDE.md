@@ -141,7 +141,12 @@ else it improves.
 
     An entity with no properties emits *only* the private constructor — a generated public one
     would be parameterless and collide with it.
-11. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
+11. **`ImplicitUsings` suppresses framework namespaces only.** `CodeStyleFormatter.UsingsFor`
+    filters against an explicit list of what the SDK actually provides. It used to drop *every*
+    using when the flag was on, which silently omitted project-local ones — an entity with an
+    enum property did not compile. Emitting a redundant using is harmless; omitting a needed one
+    is not, so keep that list conservative.
+12. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
     domain project and omits every property it declares, so a base carrying `Id` and audit
     timestamps does not produce CS0108 on every entity. If the class is not found, `make:entity`
     stops with exit 3 rather than guessing — assume it has `Id` and the entity reaches EF with no

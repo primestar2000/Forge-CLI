@@ -52,12 +52,37 @@ public static class CodeStyleFormatter
     }
 
     /// <summary>Emits a using block only when the project does not have ImplicitUsings on.</summary>
+    /// <summary>
+    /// The namespaces <c>&lt;ImplicitUsings&gt;</c> already provides for Microsoft.NET.Sdk.
+    ///
+    /// The Web SDK adds more, but emitting a redundant using is harmless while omitting a
+    /// needed one does not compile — so this list stays conservative on purpose.
+    /// </summary>
+    private static readonly HashSet<string> ImplicitlyAvailable = new(StringComparer.Ordinal)
+    {
+        "System",
+        "System.Collections.Generic",
+        "System.IO",
+        "System.Linq",
+        "System.Net.Http",
+        "System.Threading",
+        "System.Threading.Tasks"
+    };
+
     public static string UsingsFor(CodeStyle style, params string[] namespaces)
     {
-        if (style.ImplicitUsings || namespaces.Length == 0) return string.Empty;
+        // Suppress only what ImplicitUsings actually covers. Suppressing everything — which
+        // this did — silently drops project-local usings too, and ImplicitUsings has never
+        // provided those. An entity referencing an enum from the domain's Enums namespace
+        // simply did not compile.
+        var required = style.ImplicitUsings
+            ? namespaces.Where(ns => !ImplicitlyAvailable.Contains(ns)).ToArray()
+            : namespaces;
+
+        if (required.Length == 0) return string.Empty;
 
         var sb = new StringBuilder();
-        foreach (var ns in namespaces) sb.Append("using ").Append(ns).Append(';').Append('\n');
+        foreach (var ns in required) sb.Append("using ").Append(ns).Append(';').Append('\n');
         sb.Append('\n');
         return sb.ToString();
     }

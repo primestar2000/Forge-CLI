@@ -65,6 +65,45 @@ makeEntity.SetAction((parse, ct) =>
 
 root.Subcommands.Add(makeEntity);
 
+// ---------------------------------------------------------------------------- make:enum
+var enumNameOption = new Option<string>("--name", "-n")
+{
+    Description = "Enum name (e.g. OrderStatus).",
+    Required = true
+};
+
+var enumValuesOption = new Option<string>("--values", "-v")
+{
+    Description = "Comma-separated members, optionally numbered: \"Pending,Paid\" or \"Pending=1,Paid=2\".",
+    Required = true
+};
+
+var enumFlagsOption = new Option<bool>("--flags")
+{
+    Description = "Emit [Flags] and number unnumbered members as powers of two."
+};
+
+var makeEnum = new Command("make:enum", "Scaffold a Domain enum.");
+makeEnum.Options.Add(enumNameOption);
+makeEnum.Options.Add(enumValuesOption);
+makeEnum.Options.Add(enumFlagsOption);
+makeEnum.WithGlobals();
+makeEnum.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "make:enum", (template, context, token) =>
+    {
+        var isFlags = parse.GetValue(enumFlagsOption);
+
+        // Parsed before planning so a malformed --values is a clean usage error rather than a
+        // failure halfway through building the plan.
+        var parsed = EnumValueParser.Parse(parse.GetValue(enumValuesOption), isFlags);
+        if (!parsed.Ok) return Task.FromResult(PlanResult.UsageError(parsed.Error!));
+
+        return template.PlanEnum(context,
+            new EnumSpec(parse.GetValue(enumNameOption)!, parsed.Members, isFlags), token);
+    }, ct));
+
+root.Subcommands.Add(makeEnum);
+
 // ------------------------------------------------------------------------ make:resource
 var resourceEntityOption = new Option<string>("--name", "-n")
 {

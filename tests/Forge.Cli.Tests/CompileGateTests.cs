@@ -86,6 +86,30 @@ public class CompileGateTests
     }
 
     /// <summary>
+    /// An enum used as an entity property.
+    ///
+    /// The enum lands in the domain's Enums namespace and the entity in Entities, so the entity
+    /// needs a using that nothing else supplies. It did not get one — UsingsFor suppressed every
+    /// namespace when ImplicitUsings was on, project-local ones included — and the generated
+    /// entity did not compile. A plan assertion cannot see that; this does.
+    /// </summary>
+    [Fact]
+    public async Task An_entity_with_an_enum_property_compiles_clean()
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array");
+
+        await harness.MakeEnum("OrderStatus", "Pending,Paid=5,Shipped");
+        await harness.MakeEnum("Permission", "None,Read,Write,Delete", flags: true);
+
+        await harness.MakeEntity("Order", "Reference:string,Status:OrderStatus,Access:Permission");
+        await harness.MakeRepository("Order");
+
+        AssertClean(harness.Build());
+    }
+
+    /// <summary>
     /// A base class carrying Id changes where EF finds the key and where every repository's
     /// generic constraint resolves. Redeclaring an inherited member is a CS0108 warning, which
     /// this gate fails on — and none of it is visible to a plan assertion.

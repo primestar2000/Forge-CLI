@@ -1,0 +1,7 @@
+// forge:tokens Usings, Namespace, Attribute, Enum, Members
+{{Usings}}namespace {{Namespace}};
+
+{{Attribute}}public enum {{Enum}}
+{
+{{Members}}
+}

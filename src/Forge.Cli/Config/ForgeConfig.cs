@@ -22,6 +22,7 @@ public sealed class ForgeConfig
 
     public string DomainProject { get; set; } = "";
     public string DomainEntitiesPath { get; set; } = "Entities";
+    public string DomainEnumsPath { get; set; } = "Enums";
     public string DomainNamespace { get; set; } = "";
 
     public string ApplicationProject { get; set; } = "";
