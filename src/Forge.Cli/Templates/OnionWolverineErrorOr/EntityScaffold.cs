@@ -56,6 +56,41 @@ internal static class EntityScaffold
 
         var declaresId = !inherited.Contains("Id", StringComparer.Ordinal);
 
+        // ---- relationships ---------------------------------------------------------------
+        // The target must exist, for the same reason make:repo checks its entity: a navigation
+        // property pointing at a type that is not there does not compile, and the error the
+        // compiler gives is further from the cause than this one.
+        foreach (var relation in spec.Relations)
+        {
+            // Checked before existence: an entity generated in this same command does not exist
+            // on disk yet, so the lookup would report "no such class" and send the user off to
+            // create the very thing they are creating.
+            if (relation.Target == name)
+            {
+                return PlanResult.UsageError(
+                    $"'{name}' cannot belong to itself. A self-reference needs a nullable parent " +
+                    "and a hand-written configuration; add it yourself rather than generating it.");
+            }
+
+            if (ctx.DomainIndex.FindType(relation.Target, Microsoft.CodeAnalysis.CSharp.SyntaxKind.ClassDeclaration) is null)
+            {
+                return PlanResult.ConfigInvalid(
+                    $"--belongs-to names '{relation.Target}', but no such class exists in " +
+                    $"'{config.DomainProject}'." + Environment.NewLine +
+                    $"  -> forge make:entity -n {relation.Target} --properties \"...\"   # create it first");
+            }
+        }
+
+        // A relationship contributes two members: the foreign key and the navigation. The key is
+        // an ordinary property, so it flows through the constructor and Update like any other;
+        // the navigation is EF's to populate.
+        var foreignKeys = spec.Relations
+            .Select(r => r.AsForeignKey())
+            .Where(p => !inherited.Contains(p.Name, StringComparer.Ordinal))
+            .ToList();
+
+        var constructorProperties = (List<PropertySpec>)[.. declared, .. foreignKeys];
+
         var entityPath = ctx.PathIn(config.DomainProject, config.DomainEntitiesPath, $"{name}.cs");
         var entityStub = spec.Encapsulated ? "EntityEncapsulated.cs.txt" : "Entity.cs.txt";
 
@@ -64,18 +99,19 @@ internal static class EntityScaffold
             var tokens = new Dictionary<string, string>
             {
                 ["Usings"] = ctx.UsingsForTypes(
-                    declared.Select(p => p.Type), entitiesNamespace, "System"),
+                    [.. declared.Select(p => p.Type), .. spec.Relations.Select(r => r.Target)],
+                    entitiesNamespace, "System"),
                 ["Namespace"] = entitiesNamespace,
                 ["Entity"] = name,
                 ["BaseClass"] = baseName.Length > 0 ? $" : {baseName}" : string.Empty,
                 ["Properties"] = RenderProperties(
-                    declared, ctx.CodeStyle.IndentUnit, spec.Encapsulated, declaresId)
+                    declared, spec.Relations, ctx.CodeStyle.IndentUnit, spec.Encapsulated, declaresId)
             };
 
             if (spec.Encapsulated)
             {
-                tokens["Constructor"] = RenderConstructor(name, declared, ctx.CodeStyle.IndentUnit);
-                tokens["Update"] = RenderUpdate(declared, ctx.CodeStyle.IndentUnit);
+                tokens["Constructor"] = RenderConstructor(name, constructorProperties, ctx.CodeStyle.IndentUnit);
+                tokens["Update"] = RenderUpdate(constructorProperties, ctx.CodeStyle.IndentUnit);
             }
 
             return ctx.Render(entityStub, tokens);
@@ -91,7 +127,7 @@ internal static class EntityScaffold
                 ["DomainEntitiesNamespace"] = entitiesNamespace,
                 ["Entity"] = name,
                 ["EntityPlural"] = plural,
-                ["PropertyConfig"] = RenderPropertyConfig(spec.Properties, ctx.CodeStyle.IndentUnit)
+                ["PropertyConfig"] = RenderPropertyConfig(spec.Properties, spec.Relations, ctx.CodeStyle.IndentUnit)
             })));
 
         // ---- 3. DbSet on the DbContext --------------------------------------------------
@@ -135,32 +171,41 @@ internal static class EntityScaffold
     /// stub would be left with a stray blank line where it used to be.
     /// </summary>
     private static string RenderProperties(
-        IReadOnlyList<PropertySpec> properties, string indent, bool encapsulated, bool declaresId)
+        IReadOnlyList<PropertySpec> properties,
+        IReadOnlyList<RelationSpec> relations,
+        string indent,
+        bool encapsulated,
+        bool declaresId)
     {
-        var lines = new List<string>();
+        var blocks = new List<string>();
 
         if (declaresId)
         {
-            lines.Add($"{indent}public Guid Id {{ get; {(encapsulated ? "private set;" : "set;")} }}");
+            blocks.Add($"{indent}public Guid Id {{ get; {(encapsulated ? "private set;" : "set;")} }}");
         }
 
-        if (properties.Count == 0)
+        if (properties.Count == 0 && relations.Count == 0)
         {
-            lines.Add($"{indent}// TODO: add properties, or re-run with --properties \"Name:string,...\"");
-            return string.Join("\n\n", lines);
+            blocks.Add($"{indent}// TODO: add properties, or re-run with --properties \"Name:string,...\"");
+            return string.Join("\n\n", blocks);
         }
 
-        var sb = new StringBuilder();
-        foreach (var property in properties)
+        if (properties.Count > 0)
         {
-            if (sb.Length > 0) sb.Append('\n');
-            sb.Append(indent).Append(property.Render(encapsulated));
+            blocks.Add(string.Join("\n", properties.Select(p => indent + p.Render(encapsulated))));
         }
 
-        lines.Add(sb.ToString());
+        // Relations get their own block: the key/navigation pair reads as one thing, and keeping
+        // it apart from the scalar columns makes the shape of the entity obvious at a glance.
+        foreach (var relation in relations)
+        {
+            blocks.Add(
+                $"{indent}public {relation.ForeignKeyType} {relation.ForeignKeyName} " +
+                $"{{ {(encapsulated ? "get; private set;" : "get; set;")} }}\n" +
+                indent + relation.Render(encapsulated));
+        }
 
-        // Blank line between Id and the entity's own properties; none between the properties.
-        return string.Join("\n\n", lines);
+        return string.Join("\n\n", blocks);
     }
 
     /// <summary>
@@ -220,10 +265,28 @@ internal static class EntityScaffold
         return sb.Append(indent).Append('}').ToString();
     }
 
-    private static string RenderPropertyConfig(IReadOnlyList<PropertySpec> properties, string indent)
+    private static string RenderPropertyConfig(
+        IReadOnlyList<PropertySpec> properties,
+        IReadOnlyList<RelationSpec> relations,
+        string indent)
     {
         var body = indent + indent;
         var sb = new StringBuilder();
+
+        foreach (var relation in relations)
+        {
+            // Written out rather than left to convention. EF would infer this relationship, but
+            // it would also infer the delete behaviour, and cascade-by-default on a required
+            // foreign key deletes rows nobody asked to delete. Explicit and editable beats
+            // implicit and surprising.
+            sb.Append('\n').Append(body)
+              .Append($"builder.HasOne(x => x.{relation.Target})").Append('\n')
+              .Append(body).Append(indent).Append(".WithMany()").Append('\n')
+              .Append(body).Append(indent).Append($".HasForeignKey(x => x.{relation.ForeignKeyName})").Append('\n')
+              .Append(body).Append(indent)
+              .Append($".OnDelete(DeleteBehavior.{(relation.Optional ? "SetNull" : "Restrict")});")
+              .Append('\n');
+        }
 
         foreach (var property in properties)
         {

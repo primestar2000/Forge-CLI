@@ -30,6 +30,14 @@ var skipDbSetOption = new Option<bool>("--skip-dbset")
     Description = "Do not add a DbSet property to the DbContext."
 };
 
+var belongsToOption = new Option<string[]>("--belongs-to")
+{
+    Description = "Entities this one references, e.g. --belongs-to Author \"Publisher?\". " +
+                  "Each adds a {Target}Id foreign key and a navigation property; a trailing " +
+                  "? makes the relationship optional.",
+    AllowMultipleArgumentsPerToken = true
+};
+
 var publicSettersOption = new Option<bool>("--public-setters")
 {
     Description = "Emit { get; set; } instead of the default encapsulated entity " +
@@ -41,6 +49,7 @@ makeEntity.Options.Add(entityNameOption);
 makeEntity.Options.Add(propertiesOption);
 makeEntity.Options.Add(skipDbSetOption);
 makeEntity.Options.Add(publicSettersOption);
+makeEntity.Options.Add(belongsToOption);
 makeEntity.WithGlobals();
 makeEntity.SetAction((parse, ct) =>
     CommandRunner.RunGenerator(parse, "make:entity", (template, context, token) =>
@@ -54,11 +63,15 @@ makeEntity.SetAction((parse, ct) =>
         // explicit --public-setters beats the config so a one-off does not need an edit.
         var encapsulated = !parse.GetValue(publicSettersOption) && context.Config.EncapsulateEntities;
 
+        var relations = RelationParser.Parse(parse.GetValue(belongsToOption));
+        if (!relations.Ok) return Task.FromResult(PlanResult.UsageError(relations.Error!));
+
         var spec = new EntitySpec(
             parse.GetValue(entityNameOption)!,
             parsed.Properties,
             parse.GetValue(skipDbSetOption),
-            encapsulated);
+            encapsulated,
+            relations.Relations);
 
         return template.PlanEntity(context, spec, token);
     }, ct));

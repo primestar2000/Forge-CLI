@@ -141,6 +141,42 @@ public class CompileGateTests
     }
 
     /// <summary>
+    /// Relationships, all the way to a live EF model.
+    ///
+    /// Compiling is not enough here: a bad HasForeignKey or a navigation EF cannot bind produces
+    /// code that builds and then throws when the model is first constructed. VerifyHostStarts
+    /// builds the real model, so it catches that.
+    /// </summary>
+    [Fact]
+    public async Task Entities_with_relationships_compile_and_build_a_valid_model()
+    {
+        if (!EfTool.IsInstalled())
+        {
+            Assert.Fail("dotnet-ef is required for this gate: dotnet tool install --global dotnet-ef");
+        }
+
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array");
+
+        await harness.MakeEntity("Author", "Name:string");
+        await harness.MakeEntity("Publisher", "Name:string");
+
+        // Required and optional in one entity: they take different delete behaviours, and an
+        // optional navigation must not carry the = null! a required one needs.
+        await harness.MakeEntity("Book", "Title:string", true, "Author", "Publisher?");
+
+        await harness.MakeRepository("Book");
+        await harness.MakeResource("Book");
+
+        AssertClean(harness.Build());
+
+        var host = harness.VerifyHostStarts();
+        Assert.True(host.ExitCode == 0,
+            "EF could not build a model from the generated relationships:\n" + host.Output);
+    }
+
+    /// <summary>
     /// A base class carrying Id changes where EF finds the key and where every repository's
     /// generic constraint resolves. Redeclaring an inherited member is a CS0108 warning, which
     /// this gate fails on — and none of it is visible to a plan assertion.

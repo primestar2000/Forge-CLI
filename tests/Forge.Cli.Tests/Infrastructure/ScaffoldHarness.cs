@@ -64,10 +64,18 @@ public sealed class ScaffoldHarness : IDisposable
         return Apply(await _template.PlanSolution(context, spec, CancellationToken.None));
     }
 
-    public Task<ExecutionResult> MakeEntity(string name, string properties, bool encapsulated = true) =>
-        Run(ctx => _template.PlanEntity(ctx,
-            new EntitySpec(name, PropertyParser.Parse(properties).Properties, Encapsulated: encapsulated),
-            CancellationToken.None));
+    public Task<ExecutionResult> MakeEntity(
+        string name, string properties, bool encapsulated = true, params string[] belongsTo) =>
+        Run(ctx =>
+        {
+            var relations = RelationParser.Parse(belongsTo);
+            Assert.True(relations.Ok, relations.Error);
+
+            return _template.PlanEntity(ctx,
+                new EntitySpec(name, PropertyParser.Parse(properties).Properties,
+                    Encapsulated: encapsulated, Relations: relations.Relations),
+                CancellationToken.None);
+        });
 
     public Task<ExecutionResult> MakeEnum(string name, string values, bool flags = false) =>
         Run(ctx =>

@@ -250,6 +250,129 @@ public class EntityShapeTests : IDisposable
         Assert.Contains("public string Reference { get; set; }", entity);
     }
 
+    // ---- relationships ---------------------------------------------------------------------
+
+    private PlanResult PlanWithRelations(string properties, params string[] belongsTo)
+    {
+        var loaded = ConfigLoader.Load(_root);
+        Assert.True(loaded.Ok, loaded.Error);
+
+        var ctx = new TemplateContext(
+            loaded.Config!, loaded.SolutionRoot!, CodeStyle.Default,
+            new StubRepository(loaded.SolutionRoot!, loaded.Config!.StubOverridesPath, "OnionWolverineErrorOr"),
+            force: false);
+
+        var relations = RelationParser.Parse(belongsTo);
+        Assert.True(relations.Ok, relations.Error);
+
+        return EntityScaffold.Plan(ctx, new EntitySpec("Order",
+            PropertyParser.Parse(properties).Properties,
+            SkipDbSet: true, Encapsulated: true, Relations: relations.Relations));
+    }
+
+    private void WriteEntity(string name) =>
+        File.WriteAllText(Path.Combine(_root, "src", "App.Domain", $"{name}.cs"),
+            $"namespace App.Domain.Entities;\n\npublic class {name} {{ }}");
+
+    private static string Created(PlanResult result, string endsWith) =>
+        result.Plan.Actions.OfType<FileAction.Create>()
+            .Single(a => a.Path.EndsWith(endsWith, StringComparison.Ordinal)).Content;
+
+    [Fact]
+    public void A_relationship_emits_a_foreign_key_and_a_navigation()
+    {
+        WriteEntity("Customer");
+
+        var result = PlanWithRelations("Reference:string", "Customer");
+        Assert.True(result.Ok, result.Error);
+
+        var entity = Created(result, "Order.cs");
+
+        Assert.Contains("public Guid CustomerId { get; private set; }", entity);
+        Assert.Contains("public Customer Customer { get; private set; } = null!;", entity);
+    }
+
+    /// <summary>
+    /// You have an id when you construct; you rarely have the loaded instance. Requiring the
+    /// navigation would make every create path fetch a row it does not need.
+    /// </summary>
+    [Fact]
+    public void The_foreign_key_is_a_constructor_parameter_and_the_navigation_is_not()
+    {
+        WriteEntity("Customer");
+
+        var entity = Created(PlanWithRelations("Reference:string", "Customer"), "Order.cs");
+
+        Assert.Contains("public Order(string reference, Guid customerId)", entity);
+        Assert.Contains("CustomerId = customerId;", entity);
+        Assert.DoesNotContain("Customer customer", entity);
+    }
+
+    /// <summary>
+    /// EF assigns a required navigation during materialisation, and the parameterless
+    /// constructor it uses cannot — so without = null! every such entity warns CS8618 and the
+    /// zero-warning gate fails.
+    /// </summary>
+    [Fact]
+    public void An_optional_relationship_is_nullable_and_needs_no_initializer()
+    {
+        WriteEntity("Customer");
+
+        var entity = Created(PlanWithRelations("Reference:string", "Customer?"), "Order.cs");
+
+        Assert.Contains("public Guid? CustomerId { get; private set; }", entity);
+        Assert.Contains("public Customer? Customer { get; private set; }", entity);
+        Assert.DoesNotContain("Customer? Customer { get; private set; } = null!;", entity);
+    }
+
+    /// <summary>
+    /// EF would infer the relationship but also the delete behaviour, and cascade-by-default on
+    /// a required foreign key deletes rows nobody asked to delete.
+    /// </summary>
+    [Fact]
+    public void Delete_behaviour_is_explicit_and_differs_by_optionality()
+    {
+        WriteEntity("Customer");
+        WriteEntity("Promotion");
+
+        var configuration = Created(
+            PlanWithRelations("Reference:string", "Customer", "Promotion?"), "OrderConfiguration.cs");
+
+        Assert.Contains(".HasForeignKey(x => x.CustomerId)", configuration);
+        Assert.Contains(".OnDelete(DeleteBehavior.Restrict)", configuration);
+        Assert.Contains(".OnDelete(DeleteBehavior.SetNull)", configuration);
+    }
+
+    [Fact]
+    public void A_relationship_to_a_type_that_does_not_exist_names_the_fix()
+    {
+        var result = PlanWithRelations("Reference:string", "Ghost");
+
+        Assert.False(result.Ok);
+        Assert.Contains("Ghost", result.Error);
+        Assert.Contains("make:entity -n Ghost", result.Error);
+    }
+
+    [Fact]
+    public void An_entity_cannot_belong_to_itself()
+    {
+        var result = PlanWithRelations("Reference:string", "Order");
+
+        Assert.False(result.Ok);
+        Assert.Contains("cannot belong to itself", result.Error);
+    }
+
+    [Theory]
+    [InlineData("Customer,Customer", "twice")]
+    [InlineData("2Bad", "valid C# identifier")]
+    public void Malformed_relations_are_a_clean_error(string value, string expected)
+    {
+        var parsed = RelationParser.Parse([value]);
+
+        Assert.False(parsed.Ok);
+        Assert.Contains(expected, parsed.Error);
+    }
+
     [Fact]
     public void Public_setters_opts_out_entirely()
     {

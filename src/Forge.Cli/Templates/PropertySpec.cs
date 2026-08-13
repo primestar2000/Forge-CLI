@@ -12,7 +12,89 @@ public sealed record EntitySpec(
     string Name,
     IReadOnlyList<PropertySpec> Properties,
     bool SkipDbSet = false,
-    bool Encapsulated = true);
+    bool Encapsulated = true,
+    IReadOnlyList<RelationSpec>? Relations = null)
+{
+    public IReadOnlyList<RelationSpec> Relations { get; init; } = Relations ?? [];
+}
+
+/// <summary>
+/// A many-to-one reference from the entity being generated to <paramref name="Target"/>:
+/// the foreign key plus the navigation property.
+///
+/// Only the owning side. The inverse collection would mean editing an entity forge already
+/// generated and the developer now owns, and EF needs no collection to make the relationship
+/// work — so forge emits the half it can write safely and says how to add the other.
+/// </summary>
+/// <param name="Optional">
+/// A nullable foreign key. Required is the default because an optional relationship EF cannot
+/// enforce is the more surprising of the two to get by accident.
+/// </param>
+public sealed record RelationSpec(string Target, bool Optional)
+{
+    public string ForeignKeyName => Target + "Id";
+
+    public string ForeignKeyType => Optional ? "Guid?" : "Guid";
+
+    public string NavigationType => Optional ? Target + "?" : Target;
+
+    /// <summary>
+    /// The foreign key is a constructor parameter; the navigation property is not. You have an
+    /// id when you construct the entity — you rarely have the loaded instance, and requiring it
+    /// would make every create path fetch a row it does not need.
+    /// </summary>
+    public PropertySpec AsForeignKey() => new(ForeignKeyName, "Guid", Optional);
+
+    /// <summary>
+    /// <c>= null!;</c> on a required navigation: EF assigns it during materialisation, and the
+    /// parameterless constructor it uses cannot, so without the initializer every entity with a
+    /// relationship warns CS8618 and the compile gate fails.
+    /// </summary>
+    public string Render(bool encapsulated)
+    {
+        var setter = encapsulated ? "get; private set;" : "get; set;";
+
+        return Optional
+            ? $"public {NavigationType} {Target} {{ {setter} }}"
+            : $"public {NavigationType} {Target} {{ {setter} }} = null!;";
+    }
+}
+
+public sealed record RelationParseResult(IReadOnlyList<RelationSpec> Relations, string? Error)
+{
+    public bool Ok => Error is null;
+}
+
+/// <summary>
+/// Parses <c>--belongs-to Author "Publisher?"</c> into relations. A trailing <c>?</c> marks the
+/// relationship optional, matching the nullable suffix <c>--properties</c> already uses.
+/// </summary>
+public static class RelationParser
+{
+    public static RelationParseResult Parse(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0) return new RelationParseResult([], null);
+
+        var relations = new List<RelationSpec>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var raw in values.SelectMany(v => v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)))
+        {
+            var optional = raw.EndsWith('?');
+            var target = NameHelper.Pascal(optional ? raw[..^1].Trim() : raw);
+
+            if (!NameHelper.IsValidIdentifier(target))
+                return new RelationParseResult([], $"'{raw}' is not a valid C# identifier, so it cannot name an entity.");
+
+            if (!seen.Add(target))
+                return new RelationParseResult([], $"'{target}' appears twice in --belongs-to.");
+
+            relations.Add(new RelationSpec(target, optional));
+        }
+
+        return new RelationParseResult(relations, null);
+    }
+}
 
 public sealed record PropertySpec(string Name, string Type, bool IsNullable)
 {
