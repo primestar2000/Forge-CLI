@@ -57,6 +57,24 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Tier 1. Two compile-gate tests scaffold a solution and build the real EF model, which
+      # needs the ef tool; they Assert.Fail rather than Skip when it is absent, because a gate
+      # that quietly skips itself is indistinguishable from one that passed. GitHub's runner
+      # images do not preinstall it.
+      #
+      # Pinned, not latest: a new dotnet-ef release must not be able to fail a release run for
+      # reasons unrelated to the commit being published. Matches the version the gate is verified
+      # against locally.
+      - name: Install dotnet-ef (tier 1)
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.5
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # `dotnet ef --version` resolves the dotnet-ef executable from PATH, so a successful
+      # install with the tools directory missing from PATH still reads as "not installed".
+      - name: Verify dotnet-ef is on PATH
+        run: dotnet ef --version
+
       # The three packages MUST publish at the same version. runtime:install and
       # make:solution --with-runtime write the CLI's OWN version into the PackageReference
       # they generate, so a CLI published ahead of the runtime packages emits a reference to
