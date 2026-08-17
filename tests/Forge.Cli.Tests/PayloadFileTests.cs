@@ -22,9 +22,43 @@ public class PayloadFileTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private static readonly string CliDll = Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "..", "..", "..", "..", "..",
-        "src", "Forge.Cli", "bin", "Debug", "net8.0", "Forge.Cli.dll"));
+    /// <summary>
+    /// These cases need the real parser in a real process, so they launch the built CLI. The
+    /// configuration and target framework are taken from this test assembly's own output path
+    /// rather than hardcoded: CI builds Release, and a hardcoded Debug path made `dotnet` fail to
+    /// find the assembly at all — which exits 1, so three tests asserting exit 2 failed on the
+    /// runner while passing locally against a stale Debug build.
+    /// </summary>
+    private static readonly string CliDll = ResolveCliDll();
+
+    private static string ResolveCliDll()
+    {
+        var output = new DirectoryInfo(AppContext.BaseDirectory);
+        var framework = output.Name;                       // net8.0
+        var configuration = output.Parent?.Name;           // Debug | Release
+
+        var directory = output;
+        while (directory is not null)
+        {
+            if (directory.GetFiles("*.slnx").Length > 0 || directory.GetFiles("*.sln").Length > 0)
+                break;
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+            throw new InvalidOperationException(
+                "Could not locate the repository root from " + AppContext.BaseDirectory);
+
+        var candidate = configuration is null
+            ? null
+            : Path.Combine(directory.FullName, "src", "Forge.Cli", "bin", configuration, framework, "Forge.Cli.dll");
+
+        if (candidate is not null && File.Exists(candidate)) return candidate;
+
+        throw new InvalidOperationException(
+            $"Forge.Cli.dll was not found at '{candidate}'. Build the CLI in the '{configuration}' " +
+            "configuration before running these tests.");
+    }
 
     private (int ExitCode, string Output) Run(params string[] arguments)
     {
