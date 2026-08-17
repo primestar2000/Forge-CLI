@@ -98,8 +98,15 @@ internal static class EntityScaffold
         {
             var tokens = new Dictionary<string, string>
             {
+                // The base class counts as a referenced type. It usually sits in the same
+                // namespace as the entities (that is where --with-base-entity puts it), but a
+                // solution that organises it under Domain/Common does not compile without this.
                 ["Usings"] = ctx.UsingsForTypes(
-                    [.. declared.Select(p => p.Type), .. spec.Relations.Select(r => r.Target)],
+                    [
+                        .. declared.Select(p => p.Type),
+                        .. spec.Relations.Select(r => r.Target),
+                        .. baseName.Length > 0 ? new[] { baseName } : []
+                    ],
                     entitiesNamespace, "System"),
                 ["Namespace"] = entitiesNamespace,
                 ["Entity"] = name,

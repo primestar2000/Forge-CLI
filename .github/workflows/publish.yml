@@ -7,12 +7,21 @@
 # One-time setup on nuget.org, per package (Pitechy.Forge.Cli, Pitechy.Forge.Runtime,
 # Pitechy.Forge.Runtime.Wolverine):
 #   Account -> Trusted Publishing -> Add
-#     Repository owner : primestar2000
+#     Package owner    : Pitechy          <- the nuget.org account that owns the packages
+#     Repository owner : primestar2000    <- the GITHUB owner; a different thing entirely
 #     Repository       : Forge-CLI
 #     Workflow file    : publish.yml
-#     Environment      : release
-# Then create a GitHub environment named "release" (Settings -> Environments). Requiring a
+#     Environment      : development
+#
+# "Package owner" and "Repository owner" are easy to conflate and are not the same: the first is
+# on nuget.org, the second is a claim in the OIDC token GitHub mints. Setting the repository
+# owner to the NuGet org name gets the exchange refused, with an error that does not say which
+# claim disagreed.
+#
+# Then create a GitHub environment of the same name (Settings -> Environments). Requiring a
 # reviewer on it makes publishing a deliberate, approved act rather than a side effect of a tag.
+#
+# A newly created policy must be used within 7 days or it expires.
 
 name: publish
 
@@ -32,9 +41,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
 
-    # Gates the OIDC token: without a matching environment on the nuget.org policy, the
-    # exchange is refused.
-    environment: release
+    # MUST match the Environment field on the nuget.org Trusted Publishing policy exactly.
+    # It is part of the OIDC token's claims, so a mismatch is refused at the exchange with an
+    # error that does not name the environment as the cause.
+    environment: development
 
     permissions:
       contents: read

@@ -214,6 +214,29 @@ public class EntityShapeTests : IDisposable
     /// Guessing is broken either way: assume the base has Id and the entity reaches EF with no
     /// key; assume it does not and every entity warns CS0108. Stop with the fix instead.
     /// </summary>
+    /// <summary>
+    /// --with-base-entity puts the class beside the entities, so the same namespace is the
+    /// common case and hides this. A solution that files it under Domain/Common instead — the
+    /// natural place when adopting forge on an existing codebase — generated
+    /// "class Order : BaseEntity" with no using, and did not compile.
+    /// </summary>
+    [Fact]
+    public void A_base_class_in_another_namespace_is_imported()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "src", "App.Domain", "Common"));
+        File.WriteAllText(
+            Path.Combine(_root, "src", "App.Domain", "Common", "BaseEntity.cs"),
+            "namespace App.Domain.Common;\n\npublic abstract class BaseEntity\n{\n" +
+            "    public Guid Id { get; protected set; }\n}");
+
+        SetBaseClass("BaseEntity");
+
+        var entity = Entity("Reference:string");
+
+        Assert.Contains("using App.Domain.Common;", entity);
+        Assert.Contains("public class Order : BaseEntity", entity);
+    }
+
     [Fact]
     public void A_base_class_that_does_not_exist_is_a_config_error_naming_the_fix()
     {
