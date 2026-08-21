@@ -49,6 +49,18 @@ public static class MakeSolutionCommand
                           "every generated entity from it."
         };
 
+    /// <summary>
+    /// Negative flag rather than --with-swagger, because Swagger is on by default. The other
+    /// --with-* flags gate things that can break a restore or change the architecture; this one
+    /// only removes an OpenAPI document from an HTTP API that would otherwise have one.
+    /// </summary>
+    private static readonly Option<bool> NoSwaggerOption =
+        new("--no-swagger")
+        {
+            Description = "Do not wire Swashbuckle and the /swagger UI into the API project. " +
+                          "Swagger is included by default; swagger:install adds it later."
+        };
+
     private static readonly Option<bool> PinForgeOption =
         new("--pin-forge")
         {
@@ -61,7 +73,7 @@ public static class MakeSolutionCommand
         var command = new Command("make:solution",
             "Scaffold a full onion-architecture solution, wired and ready to build.");
 
-        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption, WithRuntimeOption, WithBaseEntityOption })
+        foreach (var option in new Option[] { NameOption, OutputOption, TemplateOption, RoleGuardOption, SchedulerOption, FrameworkOption, PinForgeOption, WithRuntimeOption, WithBaseEntityOption, NoSwaggerOption })
             command.Options.Add(option);
 
         command.WithGlobals();
@@ -98,7 +110,8 @@ public static class MakeSolutionCommand
             DbContextName: null,
             PinForge: parse.GetValue(PinForgeOption),
             WithRuntime: parse.GetValue(WithRuntimeOption),
-            WithBaseEntity: parse.GetValue(WithBaseEntityOption));
+            WithBaseEntity: parse.GetValue(WithBaseEntityOption),
+            Swagger: !parse.GetValue(NoSwaggerOption));
 
         // Stubs resolve against the solution being created, so a team can pre-seed .forge/stubs.
         var stubs = new StubRepository(root, ".forge/stubs", template.SnippetFolder);

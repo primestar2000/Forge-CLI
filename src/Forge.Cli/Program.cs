@@ -298,6 +298,19 @@ runtimeInstall.SetAction((parse, ct) =>
 
 root.Subcommands.Add(runtimeInstall);
 
+// -------------------------------------------------------------------- swagger:install
+// The retrofit half of `make:solution --no-swagger`'s default. Every solution scaffolded before
+// Swagger became part of the template needs this, and so does any brownfield solution forge did
+// not create — neither can be helped by a creation-time flag.
+var swaggerInstall = new Command("swagger:install",
+    "Wire an OpenAPI document and the /swagger UI into this solution's API project.");
+swaggerInstall.WithGlobals();
+swaggerInstall.SetAction((parse, ct) =>
+    CommandRunner.RunGenerator(parse, "swagger:install",
+        (template, context, token) => template.PlanSwaggerInstall(context, token), ct));
+
+root.Subcommands.Add(swaggerInstall);
+
 // --------------------------------------------------------------------- init / doctor
 root.Subcommands.Add(InitCommand.Build());
 root.Subcommands.Add(DoctorCommand.Build());

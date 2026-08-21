@@ -64,7 +64,15 @@ public static class RuntimeInstallScaffold
         // The singleton identity override only makes sense where these types exist. In a
         // brownfield solution forge did not scaffold, they may not — and referencing them would
         // break the build.
-        var hasIdentity = Declares(ctx, "ICurrentUserSetter") && Declares(ctx, "CurrentUser");
+        //
+        // Read out of Program.cs rather than a project index, because the override is appended
+        // to Program.cs and what matters is whether the names are in scope *there*. Looking them
+        // up in the application project was wrong in the one case this exists to serve: forge's
+        // own template declares ICurrentUserSetter in the application project but CurrentUser in
+        // the API project, so the condition was never true on a forge-generated solution, no
+        // override was emitted, and invoke:run --as-role was denied as 'Guest' every time.
+        var hasIdentity = program.Contains("ICurrentUserSetter", StringComparison.Ordinal)
+                          && program.Contains("<CurrentUser>", StringComparison.Ordinal);
 
         var version = versionOverride ?? ForgeVersion.Current;
         var newLine = ctx.CodeStyle.NewLine;
@@ -176,9 +184,6 @@ public static class RuntimeInstallScaffold
 
         return PlanResult.Success(plan);
     }
-
-    private static bool Declares(TemplateContext ctx, string typeName) =>
-        ctx.ApplicationIndex.Types.Any(t => t.Name == typeName);
 
     /// <summary>
     /// Threads one patch outcome into the running text. Returns false only for a real failure —

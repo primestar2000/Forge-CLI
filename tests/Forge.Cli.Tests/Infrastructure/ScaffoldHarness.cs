@@ -46,8 +46,16 @@ public sealed class ScaffoldHarness : IDisposable
 
     public string SolutionDirectory { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// <paramref name="targetFramework"/> defaults to null, meaning SolutionSpec's own default —
+    /// but note that default is derived from the runtime of whatever process asks, and THIS
+    /// process is the net8.0 test host. So every gate that does not pass a framework explicitly
+    /// is exercising net8.0, regardless of the SDK installed or what a user would actually get.
+    /// That is how a scaffold whose net10.0 configuration could not resolve passed every gate.
+    /// </summary>
     public async Task<ExecutionResult> MakeSolution(
-        string name, string roleGuardStyle, bool withBaseEntity = false)
+        string name, string roleGuardStyle, bool withBaseEntity = false, bool swagger = true,
+        string? targetFramework = null)
     {
         SolutionDirectory = Path.Combine(Root, name);
 
@@ -58,8 +66,8 @@ public sealed class ScaffoldHarness : IDisposable
         // generated app, and a TFM whose runtime is not installed fails with "You must install
         // or update .NET" rather than telling us anything about the generated code.
         var spec = new SolutionSpec(name, SolutionDirectory, roleGuardStyle, "wolverine",
-            SolutionSpec.DefaultTargetFramework, "UserRole", null,
-            WithBaseEntity: withBaseEntity);
+            targetFramework ?? SolutionSpec.DefaultTargetFramework, "UserRole", null,
+            WithBaseEntity: withBaseEntity, Swagger: swagger);
 
         return Apply(await _template.PlanSolution(context, spec, CancellationToken.None));
     }
@@ -140,6 +148,16 @@ public sealed class ScaffoldHarness : IDisposable
     }
 
     public BuildOutcome Build() => RunDotnet("build", "--nologo", "-v", "q");
+
+    /// <summary>
+    /// Adds a package to one of the generated projects, the way a developer would.
+    ///
+    /// Exists to test a property the scaffold has to have but that building it can never show:
+    /// that the dependency graph it hands over can still MOVE. A set of pins can restore, build
+    /// and run perfectly and still be unable to accept the next package the developer needs.
+    /// </summary>
+    public BuildOutcome AddPackage(string projectSuffix, string package, string version) =>
+        RunDotnet("add", Path.Combine("src", projectSuffix), "package", package, "--version", version);
 
     private BuildOutcome RunDotnet(params string[] arguments)
     {

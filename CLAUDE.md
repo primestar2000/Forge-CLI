@@ -153,7 +153,28 @@ else it improves.
     `dotnet ef` from the solution root therefore created a *second* database there while the
     application read the one beside the API project. `EfTool.WorkingDirectoryFor` is the single
     place that decides this, and `--project`/`--startup-project` are absolute because of it.
-13. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
+13. **Generated package versions are a coherent set per TFM, never independent pins.**
+    `PackageVersions.For(tfm)` returns EF Core, Wolverine and SQLitePCLRaw together, and each
+    row must satisfy two conditions: the Wolverine version supports that TFM, and it does not
+    cap `Microsoft.Extensions.*` below what the EF Core on the same row resolves to.
+
+    Independent pins produced a scaffold that straddled EF Core 8, Wolverine/Extensions 9 and a
+    net10.0 target. It restored, built, ran, and passed every gate — and failed the first time a
+    user added a package from the current generation, with an NU1107 no per-package nudge can
+    resolve. **A scaffold's dependency graph has to be able to move**; "it builds" does not
+    demonstrate that, so `The_generated_dependency_graph_can_still_move` adds a package and
+    rebuilds.
+
+14. **The compile gate must name the target framework explicitly.**
+    `SolutionSpec.DefaultTargetFramework` is derived from the runtime of the *calling* process,
+    and the test host targets `net8.0`. Every gate that omitted the framework was therefore
+    exercising net8.0 only — so the net10.0 configuration that every user on a current SDK
+    receives was never built by any test. That is how invariant 13's bug shipped.
+
+    Gate tests that care about the generated graph run as a `[Theory]` over `net8.0`, `net9.0`
+    and `net10.0`. Adding a TFM to the matrix means adding it here too.
+
+15. **A configured `entityBaseClass` is read, not assumed.** forge looks the class up in the
     domain project and omits every property it declares, so a base carrying `Id` and audit
     timestamps does not produce CS0108 on every entity. If the class is not found, `make:entity`
     stops with exit 3 rather than guessing — assume it has `Id` and the entity reaches EF with no
@@ -260,7 +281,7 @@ not something to quietly add.
 
 | Tier | Requires | Commands |
 |---|---|---|
-| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init`, `runtime:install` — ~80% of the tool |
+| 0 | Nothing but the SDK | `make:*`, `stub:*`, `config:*`, `doctor`, `init`, `runtime:install`, `swagger:install` — ~80% of the tool |
 | 1 | `dotnet-ef` global tool | `db:migrate`, `db:migration`, `db:rollback`, `db:status` |
 | 2 | `Forge.Runtime` PackageReference | `db:seed`, runtime-mode `route:list` |
 | 2 | **+** `Forge.Runtime.Wolverine` | `invoke:list`, `invoke:run` |

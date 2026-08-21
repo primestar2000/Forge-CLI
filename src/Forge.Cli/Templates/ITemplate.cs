@@ -50,6 +50,15 @@ public interface ITemplate
     Task<PlanResult> PlanRuntimeInstall(TemplateContext ctx, string? version, CancellationToken ct);
 
     /// <summary>
+    /// Wires an OpenAPI document and its UI into a solution that already exists.
+    ///
+    /// Separate from PlanSolution for the same reason PlanRuntimeInstall is: solutions
+    /// scaffolded before this existed, and brownfield ones forge never created, both need the
+    /// wiring retrofitted rather than generated.
+    /// </summary>
+    Task<PlanResult> PlanSwaggerInstall(TemplateContext ctx, CancellationToken ct);
+
+    /// <summary>
     /// Architecture-specific health checks (role-guard shape, scheduler package, DbContext).
     /// These live here rather than in Diagnostics/Checks so the core diagnostics stay free of
     /// onion/Wolverine/ErrorOr knowledge — invariant 8.

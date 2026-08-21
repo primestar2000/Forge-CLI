@@ -81,10 +81,27 @@ internal static class SolutionScaffold
               $"    <PackageReference Include=\"Pitechy.Forge.Runtime.Wolverine\" Version=\"{ForgeVersion.Current}\" />"
             : string.Empty;
 
+        // Swagger is ON by default, unlike the runtime packages. The reason --with-runtime is
+        // opt-in does not apply here: Swashbuckle is a stable public package that always
+        // restores, whereas an unpublished Pitechy.Forge.Runtime version would make the
+        // generated solution fail to restore. An HTTP API with no way to see its own endpoints
+        // is the surprising default, not the other way round.
+        var swaggerReference = spec.Swagger
+            ? SwaggerScaffold.PackageReferenceXml("    ", Environment.NewLine) + Environment.NewLine
+            : string.Empty;
+
+        // Chosen as a set for this TFM, never pinned independently — see PackageVersions for
+        // what independent pins cost.
+        var packages = PackageVersions.For(spec.TargetFramework);
+
         var projectModel = new Dictionary<string, string>
         {
             ["Solution"] = s,
             ["TargetFramework"] = spec.TargetFramework,
+            ["EfCoreVersion"] = packages.EfCore,
+            ["WolverineVersion"] = packages.Wolverine,
+            ["SqlitePclRawVersion"] = packages.SqlitePclRaw,
+            ["SwaggerReference"] = swaggerReference,
             ["ForgeRuntimeReference"] = runtimeReference
         };
 
@@ -241,6 +258,20 @@ internal static class SolutionScaffold
                 ["DbContextNamespace"] = dbContextNs,
                 ["DbContextName"] = spec.ResolvedDbContextName,
                 ["CurrentUserRegistration"] = RenderCurrentUserRegistration(spec),
+                // Trailing newline, no leading one: the token sits on its own line directly
+                // above the next block, so the value supplies the separating blank line and an
+                // empty value leaves exactly one — the shape --no-swagger has to look right in.
+                ["SwaggerRegistration"] = spec.Swagger
+                    ? string.Join(Environment.NewLine,
+                          SwaggerScaffold.Registrations.Select(r => r.Statement)) + Environment.NewLine
+                    : string.Empty,
+                // Leading AND trailing newline, matching ForgeRuntimeHook, because both tokens
+                // share one line in the stub — that is what keeps every on/off combination of
+                // the two from collapsing together or leaving a double blank.
+                ["SwaggerMiddleware"] = spec.Swagger
+                    ? Environment.NewLine +
+                      SwaggerScaffold.Middleware("    ", Environment.NewLine) + Environment.NewLine
+                    : string.Empty,
                 ["ForgeRuntimeUsing"] = spec.WithRuntime
                     ? "using Forge.Runtime;" + Environment.NewLine +
                       "using Forge.Runtime.Wolverine;" + Environment.NewLine

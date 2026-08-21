@@ -281,14 +281,146 @@ public class CompileGateTests
             "Generated host failed to start (DI registration gap?):\n" + host.Output);
     }
 
-    private static void AssertClean(BuildOutcome build)
+    /// <summary>
+    /// Swagger is on by default, so it is now part of what every scaffold must compile with —
+    /// a bad package version or a misplaced statement would break `make:solution` itself rather
+    /// than some opt-in path. The zero-warning assertion also catches a Swashbuckle version
+    /// whose transitive dependencies downgrade the pinned EF Core 8 packages (NU1605).
+    /// </summary>
+    [Fact]
+    public async Task A_solution_with_swagger_compiles_and_starts()
+    {
+        if (!EfTool.IsInstalled())
+        {
+            Assert.Fail("dotnet-ef is required for this gate: dotnet tool install --global dotnet-ef");
+        }
+
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array");
+        await harness.MakeEntity("Order", "Reference:string,Total:decimal");
+        await harness.MakeRepository("Order");
+
+        AssertClean(harness.Build());
+
+        var program = await File.ReadAllTextAsync(
+            Path.Combine(harness.SolutionDirectory, "src", "Gate.API", "Program.cs"));
+
+        Assert.Contains("builder.Services.AddSwaggerGen();", program);
+        Assert.Contains("app.UseSwaggerUI();", program);
+
+        var host = harness.VerifyHostStarts();
+        Assert.True(host.ExitCode == 0,
+            "Generated host failed to start with Swagger wired:\n" + host.Output);
+    }
+
+    /// <summary>
+    /// The opt-out has to produce a solution that is clean, not merely one that builds: the
+    /// orphaned AddEndpointsApiExplorer() this replaced was dead code in every solution forge
+    /// ever generated, and re-introducing it under --no-swagger would repeat that.
+    /// </summary>
+    [Fact]
+    public async Task A_solution_without_swagger_has_no_swagger_wiring_at_all()
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array", swagger: false);
+        await harness.MakeEntity("Order", "Reference:string,Total:decimal");
+
+        AssertClean(harness.Build());
+
+        var apiDirectory = Path.Combine(harness.SolutionDirectory, "src", "Gate.API");
+        var program = await File.ReadAllTextAsync(Path.Combine(apiDirectory, "Program.cs"));
+        var csproj = await File.ReadAllTextAsync(Path.Combine(apiDirectory, "Gate.API.csproj"));
+
+        Assert.DoesNotContain("Swagger", program);
+        Assert.DoesNotContain("AddEndpointsApiExplorer", program);
+        Assert.DoesNotContain("Swashbuckle", csproj);
+    }
+
+    /// <summary>
+    /// The gate this project was missing, and the reason a real user's solution broke.
+    ///
+    /// Every other test here proves the scaffold builds. None of them could prove the dependency
+    /// graph can still MOVE — and the previous pins could not. WolverineFx 3.6.1 caps every
+    /// Microsoft.Extensions.* package below 10.0.0 on all of its framework groups; a net10.0
+    /// target resolves them at 10.x. The scaffold restored, built, ran and passed every gate,
+    /// then produced an unsatisfiable NU1107 the first time a developer added a package that
+    /// pulled the current generation in.
+    ///
+    /// Microsoft.Extensions.Hosting rather than a database provider, and floated within the
+    /// framework's own major rather than "latest": it is the package the cap actually applies
+    /// to, and deriving the version from the TFM keeps the test from drifting as new majors
+    /// ship or breaking on a machine whose default framework is not the newest.
+    /// </summary>
+    /// <remarks>
+    /// Run per framework, with the framework named explicitly. Relying on the default meant the
+    /// gate only ever saw net8.0 — the test host is net8.0 — so the net10.0 configuration that
+    /// every user on a current SDK receives was never built here at all.
+    /// </remarks>
+    [Theory]
+    [InlineData("net8.0")]
+    [InlineData("net9.0")]
+    [InlineData("net10.0")]
+    public async Task The_generated_dependency_graph_can_still_move(string targetFramework)
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array", targetFramework: targetFramework);
+        await harness.MakeEntity("Order", "Reference:string,Total:decimal");
+
+        AssertClean(harness.Build());
+
+        var major = targetFramework.Replace("net", string.Empty).Split('.')[0];
+
+        var added = harness.AddPackage(
+            "Gate.API", "Microsoft.Extensions.Hosting", $"{major}.*");
+
+        Assert.True(added.ExitCode == 0,
+            $"The {targetFramework} scaffold cannot accept Microsoft.Extensions.Hosting " +
+            $"{major}.x, so its dependency graph is frozen:\n" + added.Output);
+
+        // NU1510 is about the PROBE, not the scaffold: on a framework that ships
+        // Microsoft.Extensions.Hosting in its shared framework, referencing it explicitly is
+        // redundant and the SDK says so. That is precisely why it makes a good probe — it is
+        // the package Wolverine's version cap applies to — so the warning is expected here and
+        // nowhere else. NU1608 and NU1605, the two that signal a frozen graph, still fail.
+        AssertClean(harness.Build(), ignoreWarningCodes: "NU1510");
+    }
+
+    /// <summary>
+    /// The plain build, per framework. Cheap next to the graph test above and it isolates the
+    /// failure: a row that cannot even compile is a different problem from one that compiles and
+    /// then cannot accept a package.
+    /// </summary>
+    [Theory]
+    [InlineData("net8.0")]
+    [InlineData("net9.0")]
+    [InlineData("net10.0")]
+    public async Task Every_supported_framework_scaffolds_and_builds_clean(string targetFramework)
+    {
+        using var harness = new ScaffoldHarness();
+
+        await harness.MakeSolution("Gate", "single-array", targetFramework: targetFramework);
+        await harness.MakeEntity("Order", "Reference:string,Total:decimal");
+        await harness.MakeRepository("Order");
+
+        AssertClean(harness.Build());
+    }
+
+    private static void AssertClean(BuildOutcome build, params string[] ignoreWarningCodes)
     {
         Assert.True(build.ExitCode == 0,
             "Generated solution failed to build:\n" + string.Join("\n", build.Errors));
 
         // Warnings matter as much as errors here: they are how a code-style mismatch shows up
-        // (CS8618 on a non-nullable property, an unused using, an async method with no await).
-        Assert.True(build.Warnings.Count == 0,
-            "Generated solution built with warnings:\n" + string.Join("\n", build.Warnings));
+        // (CS8618 on a non-nullable property, an unused using, an async method with no await)
+        // and how an incoherent dependency graph shows up (NU1605 downgrade, NU1608 constraint).
+        var warnings = build.Warnings
+            .Where(w => !ignoreWarningCodes.Any(code => w.Contains(code, StringComparison.Ordinal)))
+            .ToList();
+
+        Assert.True(warnings.Count == 0,
+            "Generated solution built with warnings:\n" + string.Join("\n", warnings));
     }
 }

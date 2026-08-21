@@ -10,7 +10,7 @@
     <PackageReference Include="ErrorOr" Version="2.0.1" />
     <PackageReference Include="FluentValidation" Version="11.11.0" />
     <PackageReference Include="Mapster" Version="7.4.0" />
-    <PackageReference Include="WolverineFx" Version="3.6.1" />
+    <PackageReference Include="WolverineFx" Version="{{WolverineVersion}}" />
   </ItemGroup>
 
   <ItemGroup>

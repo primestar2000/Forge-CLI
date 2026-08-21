@@ -191,16 +191,53 @@ public class RuntimeInstallTests : IDisposable
     /// <summary>
     /// A brownfield app without these types would not compile if forge emitted registrations
     /// referencing them. Wiring that breaks the build is worse than wiring that stops short.
+    ///
+    /// "Without these types" means Program.cs does not register them — that is the signal forge
+    /// reads, because the override is appended to Program.cs and has to compile there.
     /// </summary>
     [Fact]
     public void It_skips_the_identity_override_when_the_types_do_not_exist()
     {
-        Scaffold(withIdentityTypes: false);
+        Scaffold(WolverineProgram
+            .Replace("builder.Services.AddScoped<CurrentUser>();\n", string.Empty, StringComparison.Ordinal)
+            .Replace("builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<CurrentUser>());\n", string.Empty, StringComparison.Ordinal)
+            .Replace("builder.Services.AddScoped<ICurrentUserSetter>(sp => sp.GetRequiredService<CurrentUser>());\n", string.Empty, StringComparison.Ordinal),
+            withIdentityTypes: false);
 
         var program = PatchedText(Plan(), "Program.cs");
 
         Assert.DoesNotContain("AddSingleton<ICurrentUserSetter>", program);
         Assert.Contains("RunForgeRuntimeAsync", program);   // core wiring still happens
+    }
+
+    /// <summary>
+    /// The regression this detection was rewritten for.
+    ///
+    /// forge's own template declares ICurrentUserSetter in the APPLICATION project and CurrentUser
+    /// in the API project. While the check looked both up in the application project it was never
+    /// satisfied on a forge-generated solution — no override was emitted, Wolverine's per-message
+    /// scope handed the handler a different ICurrentUser than the runtime had set, and
+    /// invoke:run --as-role Admin was refused with "role 'Guest' cannot execute". Observed end to
+    /// end before it was fixed.
+    /// </summary>
+    [Fact]
+    public void It_overrides_the_identity_when_CurrentUser_lives_in_the_api_project()
+    {
+        Scaffold(withIdentityTypes: false);
+
+        var api = Path.Combine(_root, "src", "App.API");
+        File.WriteAllText(Path.Combine(api, "CurrentUser.cs"),
+            "namespace App.API;\npublic class CurrentUser : ICurrentUserSetter { }");
+
+        var application = Path.Combine(_root, "src", "App.Application");
+        File.WriteAllText(Path.Combine(application, "ICurrentUser.cs"),
+            "namespace App.Application;\npublic interface ICurrentUser { }\n" +
+            "public interface ICurrentUserSetter : ICurrentUser { }");
+
+        var program = PatchedText(Plan(), "Program.cs");
+
+        Assert.Contains("if (ForgeRuntimeExtensions.IsForgeInvocation(args))", program);
+        Assert.Contains("builder.Services.AddSingleton<ICurrentUserSetter>", program);
     }
 
     /// <summary>

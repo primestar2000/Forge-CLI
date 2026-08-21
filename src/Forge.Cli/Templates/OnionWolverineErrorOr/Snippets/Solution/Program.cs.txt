@@ -1,5 +1,6 @@
 // forge:tokens ApplicationAuthNamespace, ApplicationPersistenceNamespace, InfrastructureNamespace,
-// forge:tokens DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution
+// forge:tokens DbContextNamespace, DbContextName, ApiMiddlewareNamespace, Solution,
+// forge:tokens SwaggerRegistration, SwaggerMiddleware
 {{ForgeRuntimeUsing}}using Microsoft.EntityFrameworkCore;
 using Wolverine;
 using {{ApiMiddlewareNamespace}};
@@ -11,8 +12,7 @@ using {{InfrastructureNamespace}};
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-
+{{SwaggerRegistration}}
 // SQLite by default: no server to install, and unlike InMemory it is a relational provider, so
 // migrations work out of the box. Swap for UseSqlServer/UseNpgsql when you have one.
 builder.Services.AddDbContext<{{DbContextName}}>(options =>
@@ -37,7 +37,7 @@ builder.Host.UseWolverine(options =>
 });
 
 var app = builder.Build();
-{{ForgeRuntimeHook}}
+{{ForgeRuntimeHook}}{{SwaggerMiddleware}}
 app.UseHttpsRedirection();
 app.MapControllers();
 

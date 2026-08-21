@@ -7,15 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- EF Core 8.x, not 9.x: WolverineFx 3.x constrains System.Diagnostics.DiagnosticSource to
-         < 9.0.0, and EF Core 9 transitively requires >= 9.0.0. Pairing them produces NU1107 and
-         the generated solution does not restore. Verified by the compile gate. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
+    <!-- EF Core and Wolverine are chosen as a matched pair for this target framework - see
+         PackageVersions in forge. They must belong to the same dependency generation: an older
+         EF Core beside a current Wolverine (or the reverse) restores fine on its own and then
+         fails with NU1605/NU1107 the moment a provider package is added. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="{{EfCoreVersion}}" />
     <!-- Relational supplies ToTable/HasPrecision on EntityTypeBuilder, which the generated
          IEntityTypeConfiguration files use. Any real provider (SqlServer, Npgsql) pulls this in
          anyway; referencing it explicitly means make:entity output compiles before one is chosen. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.11" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="{{EfCoreVersion}}" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="{{EfCoreVersion}}">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

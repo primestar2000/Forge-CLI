@@ -22,6 +22,9 @@
     <PackageId>Pitechy.Forge.Cli</PackageId>
     <Description>Laravel-Artisan-style architectural code generator for ASP.NET Core.</Description>
     <PackageTags>dotnet-tool;codegen;scaffolding;generator;clean-architecture;onion;wolverine;cqrs;roslyn;artisan</PackageTags>
+    <!-- nuget.org is crawled continuously, so the package page is the documentation site's
+         most reliable inbound link. Search engines need one to discover the docs at all. -->
+    <PackageProjectUrl>https://forge-cli-web.vercel.app/</PackageProjectUrl>
     <PackageOutputPath>$(MSBuildThisFileDirectory)../../nupkg</PackageOutputPath>
   </PropertyGroup>
 

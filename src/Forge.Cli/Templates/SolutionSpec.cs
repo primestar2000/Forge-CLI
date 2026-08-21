@@ -13,7 +13,8 @@ public sealed record SolutionSpec(
     string? DbContextName,
     bool PinForge = false,
     bool WithRuntime = false,
-    bool WithBaseEntity = false)
+    bool WithBaseEntity = false,
+    bool Swagger = true)
 {
     /// <summary>Name of the generated base class. Only meaningful when WithBaseEntity is set.</summary>
     public const string BaseEntityName = "BaseEntity";
